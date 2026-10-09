@@ -11,7 +11,7 @@ const DEFAULTS = {
   org: "",
   project: "",
   team: "",
-  /** Empty uses the team's default area. */
+  /** Empty uses the team's areas. */
   areaPath: "",
   members: /** @type {string[]} */ ([]),
   storyTypes: ["User Story", "Product Backlog Item"],
@@ -163,20 +163,22 @@ const linked = (rels, rel) => rels.filter((r) => r.rel === rel).map((r) => Numbe
 const PREDECESSOR = "System.LinkTypes.Dependency-Reverse";
 const RELATED = "System.LinkTypes.Related";
 
-/** Each work item type's states in board order, with their category (Proposed, InProgress, Resolved, Completed, Removed). Kept per project, since a process rarely changes. @type {Map<string, { name: string, category: string }[]>} */
+/** Each project's work item types, with their states in board order and each state's category (Proposed, InProgress, Resolved, Completed, Removed). Kept per project, since a process rarely changes. @type {Map<string, Map<string, { name: string, category: string }[]>>} */
 const typeStates = new Map();
 
-/** @param {string[]} types @param {Settings} s */
-async function loadStates(types, s) {
-  const missing = types.filter((t) => !typeStates.has(`${s.org}|${s.project}|${t}`));
-  await pool(missing, async (type) => {
-    const out = await az(["devops", "invoke", "--area", "wit", "--resource", "workItemTypeStates", "--route-parameters", `project=${s.project}`, `type=${type}`, "--api-version", "7.1"], s);
-    typeStates.set(`${s.org}|${s.project}|${type}`, (out?.value ?? []).map((/** @type {any} */ x) => ({ name: String(x.name), category: String(x.category) })));
-  });
+/** One call reads every type of the project with its states. @param {Settings} s */
+async function loadStates(s) {
+  const key = `${s.org}|${s.project}`;
+  if (!typeStates.has(key)) {
+    const out = await az(["devops", "invoke", "--area", "wit", "--resource", "workItemTypes", "--route-parameters", `project=${s.project}`, "--api-version", "7.1"], s);
+    const types = new Map((out?.value ?? []).map((/** @type {any} */ t) => [String(t.name), (t.states ?? []).map((/** @type {any} */ x) => ({ name: String(x.name), category: String(x.category) }))]));
+    typeStates.set(key, types);
+  }
+  const types = /** @type {Map<string, { name: string, category: string }[]>} */ (typeStates.get(key));
   /** @param {{ type: string, state: string }} item */
-  const category = (item) => typeStates.get(`${s.org}|${s.project}|${item.type}`)?.find((x) => x.name === item.state)?.category ?? "";
+  const category = (item) => types.get(item.type)?.find((x) => x.name === item.state)?.category ?? "";
   /** The first state of a type in this category, like "In Progress". @param {string} type @param {string} cat */
-  const firstOf = (type, cat) => typeStates.get(`${s.org}|${s.project}|${type}`)?.find((x) => x.category === cat)?.name ?? null;
+  const firstOf = (type, cat) => types.get(type)?.find((x) => x.category === cat)?.name ?? null;
   return { category, firstOf };
 }
 
@@ -221,10 +223,13 @@ async function boardCheck(s) {
   const iteration = iterations?.[0];
   if (!iteration) throw new Error(`${s.team} has no current sprint.`);
   const sprint = { name: String(iteration.name), path: String(iteration.path), start: iteration.attributes?.startDate ?? null, finish: iteration.attributes?.finishDate ?? null };
-  const areaPath = s.areaPath.trim() || String(area?.defaultValue ?? "");
-  if (!areaPath) throw new Error(`${s.team} has no default area. Set the area path in Settings.`);
+  // A team's area is a set of paths, each with or without its children, like the team's own board.
+  const areas = s.areaPath.trim()
+    ? [`[System.AreaPath] = ${quote(s.areaPath.trim())}`]
+    : (area?.values ?? []).map((/** @type {any} */ v) => `[System.AreaPath] ${v.includeChildren ? "UNDER" : "="} ${quote(String(v.value))}`);
+  if (!areas.length) throw new Error(`${s.team} has no areas. Set the area path in Settings.`);
   const board = await query(
-    `[System.TeamProject] = ${quote(s.project)} AND [System.IterationPath] = ${quote(sprint.path)} AND [System.AreaPath] = ${quote(areaPath)} AND [System.State] <> 'Removed'`,
+    `[System.TeamProject] = ${quote(s.project)} AND [System.IterationPath] = ${quote(sprint.path)} AND (${areas.join(" OR ")}) AND [System.State] <> 'Removed'`,
     s,
   );
   /** Every item read, by id. @type {Map<number, Item>} */
@@ -253,7 +258,7 @@ async function boardCheck(s) {
   const depIds = new Set();
   for (const i of scoped.values()) for (const id of blockedByParts(i.blockedBy).ids) depIds.add(id);
 
-  const { category, firstOf } = await loadStates([...new Set([...items.values()].map((i) => i.type))], s);
+  const { category, firstOf } = await loadStates(s);
   const isReview = (/** @type {Item} */ i) => ci(s.codeReviewStates, i.state);
   const isDone = (/** @type {Item} */ i) => category(i) === "Completed";
   const isClosed = (/** @type {Item} */ i) => ["Completed", "Removed"].includes(category(i)) || i.state === "Removed";
@@ -273,7 +278,6 @@ async function boardCheck(s) {
     for (const d of await query(`[System.Id] IN (${unread.slice(i, i + 200).join(", ")})`, s)) items.set(d.id, d);
   }
   const deps = /** @type {Item[]} */ ([...depIds].map((id) => items.get(id)).filter((d) => d && d.state !== "Removed"));
-  await loadStates([...new Set(deps.map((d) => d.type))], s);
   const depLinks = deps.filter((d) => prDecides(d) && !rels.has(d.id));
   for (const [id, r] of await pool(depLinks, async (d) => /** @type {const} */ ([d.id, await relations(d.id, s)]))) rels.set(id, r);
 

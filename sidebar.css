@@ -161,16 +161,59 @@ button.link .id {
 .settings h1 {
   font-size: 14px;
 }
-.settings label {
+.settings .field {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.settings .label {
   font-size: 12px;
   font-weight: 500;
 }
 .settings .hint {
-  font-weight: 400;
+  font-size: 12px;
   color: var(--wings-muted);
+}
+.settings .hint.error {
+  color: var(--wings-danger);
+}
+.stack.tight {
+  gap: 6px;
+}
+.detected {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.checks.scroll {
+  max-height: 180px;
+  overflow: auto;
+  padding: 4px 6px;
+  border: 1px solid var(--wings-hairline);
+  border-radius: 8px;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.check-row input {
+  width: auto;
+  height: auto;
+  margin: 0;
+  flex: none;
 }
 .settings details {
   display: flex;
@@ -186,7 +229,7 @@ button.link .id {
 .settings details[open] summary {
   margin-bottom: 12px;
 }
-.settings details > label + label {
+.settings details > .field + .field {
   margin-top: 12px;
 }
 .buttons {

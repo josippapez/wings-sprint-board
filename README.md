@@ -6,12 +6,20 @@ It only reads. It never changes a work item, posts a comment or creates a ticket
 
 ## Set up
 
-The sidebar asks for your organization URL, project, team and team members the first time. Project and team offer the names `az` can see. Settings stay in Wings on your computer.
+Open the sidebar and it works out what it can, reading only:
 
-Under **Scope and board rules** you describe your team's conventions. Empty fields turn their check off.
+- **Organization and project** from the Azure DevOps repos open in your Wings panes (`git remote get-url origin`).
+- **Team**: of the teams you're in, the one whose current sprint has the most items (`$mine` teams, then each one's sprint).
+- **Team members**: the team's members ticked, or just you when the team lists fewer than two, plus everyone with work in the sprint to tick.
+- **Rules** from the project's types, fields and tags and from the sprint's items: story types from the process's requirement category, the types their children use, review states, a text field with "block" in its name, the point fields in use, and tags with "goal", "added" or "stretch" in them.
+
+It shows what it found and where from, and which checks are off because nothing matched. Click **Use these**, or correct any of it first: each setting is a list to pick from, with **Other…** or a text field when a value isn't listed or a list can't load. **Detect again** re-reads with the organization, project and team you picked. Settings stay in Wings on your computer.
+
+Empty settings turn their check off.
 
 | Setting | Means |
 |---|---|
+| Area path | Empty uses the team's areas, as its board does |
 | Story types | Work item types that count as stories |
 | Scope child types | A story is in your team's scope when it has a child of one of these types. Empty puts every story in scope |
 | Child types checked | Children of an in-scope story that are checked too |
