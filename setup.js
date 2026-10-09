@@ -28,6 +28,8 @@ let detecting = null;
 let detection = null;
 /** @type {string | null} */
 let detectError = null;
+/** Whether "Scope and board rules" is open, so a re-render after a click doesn't close it. @type {boolean | null} */
+let rulesOpen = null;
 /** @type {any[] | null} */
 let panes = null;
 /** Azure DevOps repos open in Wings, most panes first. @type {{ org: string, project: string, panes: number }[]} */
@@ -529,7 +531,7 @@ function pickMany(key, options, o = {}) {
       render();
     },
   });
-  return h("div", { class: "stack tight" }, boxes.length ? h("div", { class: `checks${boxes.length > 8 ? " scroll" : ""}` }, ...boxes) : null, add);
+  return h("div", { class: "stack tight" }, boxes.length ? h("div", { id: `${id}-list`, class: `checks${boxes.length > 8 ? " scroll" : ""}` }, ...boxes) : null, add);
 }
 
 function renderSettings() {
@@ -597,7 +599,7 @@ function renderSettings() {
     listStatus(sprint, "the sprint's people"),
     h(
       "details",
-      { open: !setup },
+      { open: rulesOpen ?? !setup, ontoggle: (/** @type {Event} */ e) => (rulesOpen = /** @type {HTMLDetailsElement} */ (e.target).open) },
       h("summary", {}, "Scope and board rules"),
       labelled("Story types", pickMany("storyTypes", typeNames)),
       labelled("Scope child types", pickMany("scopeChildTypes", typeNames), "A story is in your team's scope when it has a child of one of these types. None puts every story in scope."),

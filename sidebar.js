@@ -152,6 +152,9 @@ function render() {
   const active = document.activeElement;
   const focused = active?.id;
   const caret = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement ? active.selectionStart : null;
+  // Everything is rebuilt, so keep where the page and each scrolling list were.
+  const page = document.scrollingElement?.scrollTop ?? 0;
+  const lists = [...app.querySelectorAll(".scroll[id]")].map((el) => /** @type {const} */ ([el.id, el.scrollTop]));
   /** @type {(Node | null)[]} */
   const parts = [];
   if (!main || main.phase === "loading" || (main.phase !== "setup" && main.running && !main.result)) {
@@ -180,6 +183,11 @@ function render() {
   }
   if (localError && !draft) parts.push(h("p", { class: "error", role: "alert" }, localError));
   app.replaceChildren(...parts.filter((p) => !!p));
+  for (const [id, top] of lists) {
+    const el = document.getElementById(id);
+    if (el) el.scrollTop = top;
+  }
+  if (document.scrollingElement) document.scrollingElement.scrollTop = page;
   if (focused) {
     const el = document.getElementById(focused);
     el?.focus();
