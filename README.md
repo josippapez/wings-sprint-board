@@ -1,38 +1,40 @@
 # Sprint board for Wings
 
-Adds a list button to the Wings title bar that opens your team's current Azure DevOps sprint in the right sidebar. It checks the board's hygiene for your team's scope, proposes a fix for each problem, and shows who on the team is working on what. While there are findings, the button shows how many.
+Adds a list button to the Wings title bar that opens your team's current Azure DevOps sprint in the right sidebar: a small, read-only Azure Boards. The button shows how much is in progress and how much is blocked.
 
-It only reads. It never changes a work item, posts a comment or creates a ticket: every fix is a proposal for you to apply.
+It only reads. It never changes a work item, posts a comment or creates a ticket.
+
+## The board
+
+Every item of the current sprint in your team's areas, grouped by state in workflow order. Done work starts folded. Stories carry their tasks underneath, folded to a done count like 3/8. Each row shows the type's colour, the id, the title, who it's assigned to, and chips: **Blocked** when the Blocked By field names unfinished work, **PR** with the linked pull request's status where the checks read it, **!** when a board check flags the item, and the comment count.
+
+Search by id or title, and filter by person (Everyone, Mine, Unassigned or anyone in the sprint) and type. Mine is whoever `az` is signed in as. The filters and what's folded are remembered.
+
+Click a row for the item: its state, assignee, iteration, area, tags, parent, children, what blocks it, its pull requests, the description and acceptance criteria, and the discussion, oldest comment first. Item links open in the sidebar; **Open in Azure DevOps** opens the browser. Text from Azure DevOps is shown as text: formatting is rebuilt from paragraphs, lists and emphasis only, images show as [image], and only Azure DevOps links open.
+
+The list comes from the last board check, so it costs nothing to open. An item reads its details and comments when you open it (two calls) and each pull request after that, and keeps them until the board shows a newer revision of it.
 
 ## Set up
 
-Open the sidebar and it works out what it can, reading only:
+Open the sidebar and it works out what it can, reading only, then walks you through it a question at a time. Each step has the detected answer picked, says why it was picked, and shows an example from your sprint of what the answer does. **Next** (or Enter) goes on, **Back** keeps your answers, **Turn this check off** skips an optional check, and **Use detected for the rest** saves straight away. Settings opens the same steps later.
 
-- **Organization and project** from the Azure DevOps repos open in your Wings panes (`git remote get-url origin`).
-- **Team**: of the teams you're in, the one whose current sprint has the most items (`$mine` teams, then each one's sprint).
-- **Team members**: the team's members ticked, or just you when the team lists fewer than two, plus everyone with work in the sprint to tick.
-- **Rules** from the project's types, fields and tags and from the sprint's items: story types from the process's requirement category, the types their children use, review states, a text field with "block" in its name, the point fields in use, and tags with "goal", "added" or "stretch" in them.
+1. **Where is your board?** The organization and project, from the Azure DevOps repos open in your Wings panes.
+2. **Which team's sprint?** Of the teams you're in, the one whose current sprint has the most items.
+3. **Whose work do you follow?** You, as `az` is signed in. Add teammates you look after. This is for the board checks; the board's own filters don't depend on it.
+4. **Stories and their tasks.** Stories come from the process's requirement types, tasks from the types under them. Optionally, which task types mark a story as your team's.
+5. **Other work.** Types outside stories that count when one of your people has them or their title starts with a prefix.
+6. **What blocks an item.** A text field holding the blocking ticket's number.
+7. **Priority work.** The tag on the sprint's goal work.
+8. **Work added after the sprint started.** The tags it must carry, and which types need points.
+9. **Code review states,** in which an item should have an open pull request, and a title prefix for pull requests parked on purpose.
+10. **Stale work.** Working days without a change.
 
-It shows what it found and where from, and which checks are off because nothing matched. Click **Use these**, or correct any of it first: each setting is a list to pick from, with **Other…** or a text field when a value isn't listed or a list can't load. **Detect again** re-reads with the organization, project and team you picked. Settings stay in Wings on your computer.
+Settings stay in Wings on your computer. Empty answers turn their check off.
 
-Empty settings turn their check off.
+## Board checks
 
-| Setting | Means |
-|---|---|
-| Area path | Empty uses the team's areas, as its board does |
-| Story types | Work item types that count as stories |
-| Scope child types | A story is in your team's scope when it has a child of one of these types. Empty puts every story in scope |
-| Child types checked | Children of an in-scope story that are checked too |
-| Other item types, Title prefixes | Other sprint items in scope when assigned to a team member or titled with a prefix |
-| Code review states | States whose linked pull request should still be open |
-| Blocked By field | A text field holding the blocking ticket number |
-| Goal tag | Tag on the sprint's priority work |
-| Added-during-sprint tags | Tags an item created after the sprint started must carry |
-| Types that need points, Point fields | Items of these types added during the sprint need every point field set and equal. Titles with "spike" are exempt |
-| Parked PR title prefix | A linked PR titled with this is parked on purpose and skips the PR check |
-| Stale after | Working days without a change before an in-progress item is stale |
+The Checks tab lists problems on the board for your team's scope, each with a fix for you to apply.
 
-## Checks
 
 In scope: stories with a scope child, their checked children, other matching items, and what they depend on (Blocked By tickets and the stories' Predecessor and Related links). A dependency gets the Blocked By and PR checks, and its fix is to ask its owner.
 

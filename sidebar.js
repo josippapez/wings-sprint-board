@@ -1,8 +1,9 @@
 // @ts-check
 /// <reference path="./wings.d.ts" />
 
-// The Sprint board sidebar. main.js reads the board and sends its state here with wings.broadcast; this page
-// draws it and runs the az sign-in. setup.js, loaded first, detects and edits the settings. Everything read from Azure DevOps is
+// The Sprint board sidebar's shell. main.js reads the board and sends its state here with wings.broadcast; this
+// page picks the view and runs the az sign-in. setup.js detects and edits the settings, board.js draws the board
+// and an item, and both load first. Everything read from Azure DevOps is
 // untrusted, so it only ever goes into the page as text.
 
 const app = /** @type {HTMLElement} */ (document.getElementById("app"));
@@ -34,9 +35,8 @@ const spinner = () => h("span", { class: "spinner", "aria-hidden": true });
 const day = (iso) => (iso ? new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" }).format(new Date(iso)) : "?");
 const time = (/** @type {string} */ iso) => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 
-/** A work item's id and title as a link to it. @param {{ id: number, title: string, url: string }} item */
-const itemLink = (item) =>
-  h("button", { class: "link", type: "button", title: "Open in Azure DevOps", onclick: () => void wings.openUrl(item.url) }, h("span", { class: "id" }, `#${item.id} `), item.title);
+/** A work item's id and title, opening it in the sidebar. @param {{ id: number, title: string }} item */
+const itemLink = (item) => h("button", { class: "link", type: "button", onclick: () => void openItem(item.id) }, h("span", { class: "id" }, `#${item.id} `), item.title);
 
 // ---------- the board ----------
 
@@ -120,17 +120,11 @@ const renderPerson = (p) =>
       : h("p", { class: "muted note" }, "No open items in this sprint."),
   );
 
-function renderBoard() {
+/** The board checks: findings, who is working on what, and the lower-priority test. */
+function renderChecks() {
   const r = main?.result;
   if (!r) return [];
   const parts = [
-    h(
-      "div",
-      { class: "row sprint" },
-      h("div", { class: "grow" }, h("h1", {}, r.sprint.name), h("div", { class: "dates muted" }, `${day(r.sprint.start)} – ${day(r.sprint.finish)} · checked ${time(r.checkedAt)}`)),
-      refreshButton(),
-      h("button", { class: "ghost", type: "button", onclick: openSettings }, "Settings"),
-    ),
     h("div", { class: "section-title" }, h("span", {}, "Findings"), h("span", {}, String(r.findings.length))),
     r.findings.length ? h("ul", { class: "list" }, ...r.findings.map(renderFinding)) : h("div", { class: "card clean" }, "Board is clean."),
     h("div", { class: "section-title" }, h("span", {}, "Working on")),
@@ -157,7 +151,9 @@ function render() {
   const lists = [...app.querySelectorAll(".scroll[id]")].map((el) => /** @type {const} */ ([el.id, el.scrollTop]));
   /** @type {(Node | null)[]} */
   const parts = [];
-  if (!main || main.phase === "loading" || (main.phase !== "setup" && main.running && !main.result)) {
+  // The last check's board shows while the first check after a start runs.
+  const stored = !!snapshot && !!main?.settings?.org && main.phase !== "setup" && main.phase !== "signed-out";
+  if (!main || (!stored && (main.phase === "loading" || (main.phase !== "setup" && main.running && !main.result)))) {
     parts.push(h("div", { class: "row muted" }, spinner(), "Reading the sprint board…"));
   } else if (detecting || (main.phase === "setup" && !draft)) {
     parts.push(renderDetecting());
@@ -166,20 +162,18 @@ function render() {
     if (detectError && /signed in/.test(detectError)) parts.push(signInCard());
   } else if (main.phase === "signed-out") {
     parts.push(signInCard());
-  } else if (main.phase === "error") {
+  } else if (main.phase === "error" && !stored) {
     parts.push(
       h(
         "section",
         { class: "card settings" },
         h("h1", {}, "Couldn't read the board"),
         h("p", { class: "error", role: "alert" }, main.error ?? "Unknown error"),
-        h("div", { class: "row" }, refreshButton(), h("button", { class: "ghost", type: "button", onclick: openSettings }, "Settings")),
+        h("div", { class: "row" }, refreshButton(), h("button", { class: "ghost", type: "button", onclick: () => openSettings() }, "Settings")),
       ),
     );
   } else {
-    parts.push(...renderBoard());
-    // The last refresh failed, but the board from before is still worth showing.
-    if (main.error) parts.splice(1, 0, h("p", { class: "error", role: "alert" }, `Last refresh failed: ${main.error}`));
+    parts.push(...renderMain());
   }
   if (localError && !draft) parts.push(h("p", { class: "error", role: "alert" }, localError));
   app.replaceChildren(...parts.filter((p) => !!p));
@@ -193,6 +187,11 @@ function render() {
     el?.focus();
     if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && caret != null && el.type !== "number") el.setSelectionRange(caret, caret);
   }
+  // A new setup step puts focus on its question, so a screen reader reads it and Enter goes on from there.
+  if (focusAfterRender) {
+    document.getElementById(focusAfterRender)?.focus();
+    focusAfterRender = null;
+  }
 }
 
 wings.onBroadcast((message) => {
@@ -201,7 +200,10 @@ wings.onBroadcast((message) => {
   main = m.state;
   render();
   maybeDetect();
+  // A finished check stored a new board.
+  if (m.state.result?.checkedAt && m.state.result.checkedAt !== snapshot?.checkedAt) void loadSnapshot();
 });
 
 render();
-void wings.broadcast({ type: "hello" });
+// The board from the last check shows at once, while main.js answers.
+void loadView().then(loadSnapshot).finally(() => void wings.broadcast({ type: "hello" }));

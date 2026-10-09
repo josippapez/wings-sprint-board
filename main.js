@@ -44,7 +44,7 @@ class SignedOut extends Error {}
 /**
  * @typedef {{ id: number, title: string, type: string, state: string, assignee: string | null, tags: string[],
  *   blockedBy: string, parent: number | null, iteration: string, changed: string, created: string,
- *   points: (number | null)[] }} Item
+ *   points: (number | null)[], login: string | null, rev: number, comments: number }} Item
  */
 /** @typedef {{ id: number, title: string, url: string, check: string, problem: string, fix: string, dependency: boolean }} Finding */
 
@@ -114,7 +114,7 @@ async function pool(items, fn) {
 const fields = (/** @type {Settings} */ s) =>
   [
     "System.Id", "System.Title", "System.WorkItemType", "System.State", "System.AssignedTo", "System.Tags",
-    "System.Parent", "System.IterationPath", "System.ChangedDate", "System.CreatedDate",
+    "System.Parent", "System.IterationPath", "System.ChangedDate", "System.CreatedDate", "System.Rev", "System.CommentCount",
     ...(s.blockedByField ? [s.blockedByField] : []), ...s.pointFields,
   ].map((f) => `[${f}]`).join(", ");
 
@@ -141,6 +141,9 @@ function toItem(row, s) {
     changed: String(f["System.ChangedDate"] ?? ""),
     created: String(f["System.CreatedDate"] ?? ""),
     points: s.pointFields.map((p) => (typeof f[p] === "number" ? f[p] : null)),
+    login: f["System.AssignedTo"]?.uniqueName ?? null,
+    rev: typeof f["System.Rev"] === "number" ? f["System.Rev"] : (row.rev ?? 0),
+    comments: typeof f["System.CommentCount"] === "number" ? f["System.CommentCount"] : 0,
   };
 }
 
@@ -163,7 +166,8 @@ const linked = (rels, rel) => rels.filter((r) => r.rel === rel).map((r) => Numbe
 const PREDECESSOR = "System.LinkTypes.Dependency-Reverse";
 const RELATED = "System.LinkTypes.Related";
 
-/** Each project's work item types, with their states in board order and each state's category (Proposed, InProgress, Resolved, Completed, Removed). Kept per project, since a process rarely changes. @type {Map<string, Map<string, { name: string, category: string }[]>>} */
+/** @typedef {{ name: string, category: string, color: string }} StateInfo */
+/** Each project's work item types: their colour, and their states in board order with each state's category (Proposed, InProgress, Resolved, Completed, Removed) and colour. Kept per project, since a process rarely changes. @type {Map<string, Map<string, { color: string, states: StateInfo[] }>>} */
 const typeStates = new Map();
 
 /** One call reads every type of the project with its states. @param {Settings} s */
@@ -171,15 +175,21 @@ async function loadStates(s) {
   const key = `${s.org}|${s.project}`;
   if (!typeStates.has(key)) {
     const out = await az(["devops", "invoke", "--area", "wit", "--resource", "workItemTypes", "--route-parameters", `project=${s.project}`, "--api-version", "7.1"], s);
-    const types = new Map((out?.value ?? []).map((/** @type {any} */ t) => [String(t.name), (t.states ?? []).map((/** @type {any} */ x) => ({ name: String(x.name), category: String(x.category) }))]));
+    const hex = (/** @type {unknown} */ c) => (/^[0-9a-f]{6}$/i.test(String(c)) ? `#${c}` : "#888888");
+    const types = new Map(
+      (out?.value ?? []).map((/** @type {any} */ t) => [
+        String(t.name),
+        { color: hex(t.color), states: (t.states ?? []).map((/** @type {any} */ x) => ({ name: String(x.name), category: String(x.category), color: hex(x.color) })) },
+      ]),
+    );
     typeStates.set(key, types);
   }
-  const types = /** @type {Map<string, { name: string, category: string }[]>} */ (typeStates.get(key));
+  const types = /** @type {Map<string, { color: string, states: StateInfo[] }>} */ (typeStates.get(key));
   /** @param {{ type: string, state: string }} item */
-  const category = (item) => types.get(item.type)?.find((x) => x.name === item.state)?.category ?? "";
+  const category = (item) => types.get(item.type)?.states.find((x) => x.name === item.state)?.category ?? "";
   /** The first state of a type in this category, like "In Progress". @param {string} type @param {string} cat */
-  const firstOf = (type, cat) => types.get(type)?.find((x) => x.category === cat)?.name ?? null;
-  return { category, firstOf };
+  const firstOf = (type, cat) => types.get(type)?.states.find((x) => x.category === cat)?.name ?? null;
+  return { category, firstOf, types };
 }
 
 // ---------- dates ----------
@@ -258,7 +268,7 @@ async function boardCheck(s) {
   const depIds = new Set();
   for (const i of scoped.values()) for (const id of blockedByParts(i.blockedBy).ids) depIds.add(id);
 
-  const { category, firstOf } = await loadStates(s);
+  const { category, firstOf, types } = await loadStates(s);
   const isReview = (/** @type {Item} */ i) => ci(s.codeReviewStates, i.state);
   const isDone = (/** @type {Item} */ i) => category(i) === "Completed";
   const isClosed = (/** @type {Item} */ i) => ["Completed", "Removed"].includes(category(i)) || i.state === "Removed";
@@ -273,7 +283,9 @@ async function boardCheck(s) {
     for (const id of [...linked(r, PREDECESSOR), ...linked(r, RELATED)]) depIds.add(id);
   }
   for (const id of scoped.keys()) depIds.delete(id);
-  const unread = [...depIds].filter((id) => !items.has(id));
+  // Blockers of every board item are read too, so the board can show what's blocked. Only the scope's are checked.
+  const boardBlockers = board.flatMap((i) => blockedByParts(i.blockedBy).ids);
+  const unread = [...new Set([...depIds, ...boardBlockers])].filter((id) => !items.has(id));
   for (let i = 0; i < unread.length; i += 200) {
     for (const d of await query(`[System.Id] IN (${unread.slice(i, i + 200).join(", ")})`, s)) items.set(d.id, d);
   }
@@ -401,8 +413,21 @@ async function boardCheck(s) {
     return { name, items: open, lowPriority: { meets: lowOnly && pickable.length === 0, reason } };
   });
 
+  // The board as the sidebar lists it: every sprint item in the team's areas, with what the check learned.
+  const flagged = new Map();
+  for (const f of findings) flagged.set(f.id, [...(flagged.get(f.id) ?? []), f.check]);
+  const prsOf = (/** @type {number} */ id) => pullRequestIds(rels.get(id) ?? []).map((pr) => ({ id: pr, status: prs.get(pr)?.status ?? "" }));
+  const boardItems = board.map((i) => ({
+    id: i.id, rev: i.rev, title: i.title.slice(0, 300), type: i.type, state: i.state, category: category(i),
+    assignee: i.assignee, login: i.login, parent: i.parent && onBoard.has(i.parent) ? i.parent : null, tags: i.tags,
+    blocked: isBlocked(i), blockedBy: i.blockedBy || null, comments: i.comments, prs: rels.has(i.id) ? prsOf(i.id) : null, checks: flagged.get(i.id) ?? [],
+  }));
+  const shownTypes = Object.fromEntries([...new Set(board.map((i) => i.type))].map((t) => [t, types.get(t) ?? { color: "#888888", states: [] }]));
+  const snapshot = { checkedAt: now.toISOString(), sprint, items: boardItems, types: shownTypes };
+
   return {
     sprint,
+    snapshot,
     checkedAt: now.toISOString(),
     findings,
     people,
@@ -443,18 +468,24 @@ const state = { phase: "loading", settings: DEFAULTS, missing: [], result: null,
 /** @type {Promise<Result | null> | null} */
 let inFlight = null;
 
-const publish = () => void wings.broadcast({ type: "state", state });
+// The board itself goes through storage, which also keeps it for the next start; a broadcast is limited to 64 KB.
+const publish = () => void wings.broadcast({ type: "state", state: { ...state, result: state.result && { ...state.result, snapshot: undefined } } });
 
 function label() {
   const r = state.result;
   if (state.phase === "signed-out") return wings.setSidebarLabel(SIDEBAR, "Sign in", { tone: "warning" });
   if (state.phase !== "ready" || !r) return wings.setSidebarLabel(SIDEBAR, null);
+  // What the board looks like at a glance; the board checks are one row of the details.
+  const items = r.snapshot.items;
+  const active = items.filter((i) => i.category === "InProgress" || i.category === "Resolved").length;
+  const blocked = items.filter((i) => i.blocked && i.category !== "Completed").length;
   const n = r.findings.length;
-  return wings.setSidebarLabel(SIDEBAR, n ? `${n} finding${n > 1 ? "s" : ""}` : "Clean", {
-    tone: n ? "warning" : undefined,
+  return wings.setSidebarLabel(SIDEBAR, `${active} in progress · ${blocked} blocked`, {
+    tone: blocked ? "warning" : undefined,
     rows: [
       { label: "Sprint", value: r.sprint.name },
-      ...r.people.slice(0, 5).map((p) => ({
+      { label: "Board checks", value: n ? `${n} finding${n > 1 ? "s" : ""}` : "Clean" },
+      ...r.people.slice(0, 4).map((p) => ({
         label: p.name,
         value: `${p.items.length} open, ${p.items.filter((i) => i.blocked).length} blocked${p.lowPriority?.meets ? ", escalate" : ""}`,
       })),
@@ -476,6 +507,7 @@ function refresh() {
       state.running = true;
       publish();
       const result = await boardCheck(settings);
+      await wings.storage.set("board", result.snapshot);
       Object.assign(state, { phase: "ready", result, error: null });
       return result;
     } catch (error) {
