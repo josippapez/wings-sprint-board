@@ -505,6 +505,8 @@ function refresh() {
         return null;
       }
       state.running = true;
+      // Still "setup" here would send the sidebar back into the stepper while the first check runs.
+      if (state.phase === "setup") state.phase = "loading";
       publish();
       const result = await boardCheck(settings);
       await wings.storage.set("board", result.snapshot);

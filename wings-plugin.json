@@ -1,7 +1,7 @@
 {
   "id": "sprint-board",
   "name": "Sprint board",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Your team's current Azure DevOps sprint in a sidebar: items by state with their tasks, details and comments, and board checks with a proposed fix for each. Read-only.",
   "api": 1,
   "main": "main.js",
