@@ -1,0 +1,30 @@
+# Push a tag like v0.2.0 and this attaches a .wings-plugin file to a GitHub release.
+# Wings installs and updates from that file when someone adds the repo by its link.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the tag matches the manifest version
+        run: |
+          version=$(jq -r .version wings-plugin.json)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match version $version in wings-plugin.json"
+            exit 1
+          fi
+      - name: Package and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(jq -r .id wings-plugin.json)
+          git archive --format=zip --output "$id.wings-plugin" HEAD
+          gh release create "$GITHUB_REF_NAME" "$id.wings-plugin" --verify-tag --generate-notes

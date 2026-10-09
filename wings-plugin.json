@@ -1,0 +1,45 @@
+{
+  "id": "sprint-board",
+  "name": "Sprint board",
+  "version": "0.1.0",
+  "description": "Shows your team's current Azure DevOps sprint in a sidebar, flags board hygiene problems with a proposed fix for each, and lists who is working on what. Read-only.",
+  "api": 1,
+  "main": "main.js",
+  "permissions": {
+    "exec": [
+      "az boards iteration team list",
+      "az boards area team list",
+      "az boards query",
+      "az boards work-item show",
+      "az devops invoke",
+      "az devops project list",
+      "az devops team list",
+      "az repos pr show",
+      "az login"
+    ],
+    "openUrl": [
+      "https://dev.azure.com/"
+    ]
+  },
+  "contributes": {
+    "sidebars": [
+      {
+        "id": "board",
+        "title": "Sprint board",
+        "icon": "list",
+        "page": "sidebar.html"
+      }
+    ],
+    "mcpTools": [
+      {
+        "name": "board_check",
+        "description": "Checks the team's current Azure DevOps sprint board read-only and returns the hygiene findings, each with a proposed fix, then who on the team is working on what and who is blocked with only lower-priority work left. Changes nothing.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}

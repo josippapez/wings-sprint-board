@@ -1,0 +1,214 @@
+/* Layout only: colours, buttons and inputs come from Wings' plugin-ui.css. */
+#app {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row > .grow {
+  flex: 1;
+  min-width: 0;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sprint h1 {
+  font-size: 14px;
+  font-weight: 600;
+}
+.sprint .dates {
+  font-size: 12px;
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--wings-muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.finding {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.finding .check {
+  align-self: flex-start;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--wings-warning);
+  background: color-mix(in srgb, var(--wings-warning) 14%, transparent);
+}
+.finding .problem {
+  overflow-wrap: anywhere;
+}
+.finding .fix {
+  font-size: 12px;
+  color: var(--wings-muted);
+  overflow-wrap: anywhere;
+}
+.finding .fix strong {
+  color: var(--wings-fg);
+  font-weight: 500;
+}
+
+/* A work item's id and title, opening it in Azure DevOps. */
+button.link {
+  display: block;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+button.link:hover {
+  background: none;
+  text-decoration: underline;
+}
+button.link .id {
+  color: var(--wings-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.person {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.person h2 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.item .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 12px;
+  color: var(--wings-muted);
+}
+.pill {
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.pill.goal {
+  color: var(--wings-info);
+  background: color-mix(in srgb, var(--wings-info) 14%, transparent);
+}
+.pill.blocked {
+  color: var(--wings-danger);
+  background: color-mix(in srgb, var(--wings-danger) 14%, transparent);
+}
+
+.verdict {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.verdict strong {
+  font-weight: 600;
+}
+.verdict.yes strong {
+  color: var(--wings-danger);
+}
+
+.clean {
+  padding: 12px;
+  color: var(--wings-success);
+  font-weight: 500;
+}
+
+.note {
+  font-size: 12px;
+}
+
+.settings {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings h1 {
+  font-size: 14px;
+}
+.settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.settings .hint {
+  font-weight: 400;
+  color: var(--wings-muted);
+}
+.settings details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--wings-muted);
+}
+.settings details[open] summary {
+  margin-bottom: 12px;
+}
+.settings details > label + label {
+  margin-top: 12px;
+}
+.buttons {
+  justify-content: flex-end;
+}
+
+.error {
+  color: var(--wings-danger);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--wings-hairline-strong);
+  border-top-color: var(--wings-fg);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
