@@ -197,6 +197,15 @@ const teamMembersOf = (/** @type {string} */ org, /** @type {string} */ project,
     .map((/** @type {any} */ i) => ({ name: String(i.displayName), login: String(i.uniqueName ?? "") }));
 };
 
+/** Everyone in the organization, so the people step can find someone who isn't in the team or the sprint. */
+const orgUsersOf = (/** @type {string} */ org) => async () => {
+  const out = await az(["devops", "user", "list", "--top", "10000"], org);
+  return (out?.members ?? [])
+    .map((/** @type {any} */ m) => m.user ?? {})
+    .filter((/** @type {any} */ u) => u.displayName && u.subjectKind !== "group")
+    .map((/** @type {any} */ u) => ({ name: String(u.displayName), login: String(u.mailAddress || u.principalName || "") }));
+};
+
 /** The signed-in az account, read locally. */
 const meOf = () => async () => String((await az(["account", "show", "--query", "user.name"], null)) ?? "");
 
@@ -491,8 +500,9 @@ function pickOne(key, options, o = {}) {
 }
 
 /**
- * Several values from a list as checkboxes, plus a field for values the list doesn't have.
- * @param {string} key @param {string[] | undefined} options @param {{ labels?: (v: string) => string, extra?: string }} [o]
+ * Several values from a list as checkboxes, plus a field for values the list doesn't have. With `suggest`, the
+ * field searches those people by name or email as you type.
+ * @param {string} key @param {string[] | undefined} options @param {{ labels?: (v: string) => string, extra?: string, suggest?: { name: string, login: string }[] }} [o]
  */
 function pickMany(key, options, o = {}) {
   const d = /** @type {Record<string, any>} */ (draft);
@@ -520,6 +530,33 @@ function pickMany(key, options, o = {}) {
       h("span", {}, o.labels ? o.labels(v) : v),
     ),
   );
+  const addValues = (/** @type {string[]} */ added) => {
+    d[key] = [...values, ...added.filter((v) => !values.includes(v))];
+    delete other[key];
+    focusAfterRender = `${id}-add`;
+    render();
+  };
+  const matches = () => {
+    const q = (other[key] ?? "").trim().toLowerCase();
+    if (!q || !o.suggest) return [];
+    return o.suggest.filter((p) => !values.includes(p.name) && (p.name.toLowerCase().includes(q) || p.login.toLowerCase().includes(q))).slice(0, 6);
+  };
+  const suggestions = h("div", { id: `${id}-suggest`, class: "suggest", role: "listbox", hidden: true });
+  const showSuggestions = () => {
+    const found = matches();
+    suggestions.replaceChildren(
+      ...found.map((p) =>
+        h(
+          "button",
+          // mousedown, so the click lands before the field loses focus.
+          { type: "button", class: "suggest-row", role: "option", onmousedown: (/** @type {Event} */ e) => (e.preventDefault(), addValues([p.name])) },
+          h("span", {}, p.name),
+          p.login ? h("span", { class: "muted" }, p.login) : null,
+        ),
+      ),
+    );
+    suggestions.hidden = !found.length;
+  };
   const add = h("input", {
     id: `${id}-add`,
     type: "text",
@@ -527,17 +564,19 @@ function pickMany(key, options, o = {}) {
     spellcheck: "false",
     placeholder: o.extra ?? "Add another, then Enter",
     value: other[key] ?? "",
-    oninput: (/** @type {Event} */ e) => (other[key] = /** @type {HTMLInputElement} */ (e.target).value),
+    "aria-controls": o.suggest ? `${id}-suggest` : null,
+    oninput: (/** @type {Event} */ e) => {
+      other[key] = /** @type {HTMLInputElement} */ (e.target).value;
+      showSuggestions();
+    },
     onkeydown: (/** @type {KeyboardEvent} */ e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      const added = (other[key] ?? "").split(",").map((v) => v.trim()).filter(Boolean);
-      d[key] = [...values, ...added.filter((v) => !values.includes(v))];
-      delete other[key];
-      render();
+      const first = matches()[0];
+      addValues(first ? [first.name] : (other[key] ?? "").split(",").map((v) => v.trim()).filter(Boolean));
     },
   });
-  return h("div", { class: "stack tight" }, boxes.length ? h("div", { id: `${id}-list`, class: `checks${boxes.length > 8 ? " scroll" : ""}` }, ...boxes) : null, add);
+  return h("div", { class: "stack tight" }, boxes.length ? h("div", { id: `${id}-list`, class: `checks${boxes.length > 8 ? " scroll" : ""}` }, ...boxes) : null, add, o.suggest ? suggestions : null);
 }
 
 // ---------- the stepper ----------
@@ -648,9 +687,15 @@ const STEPS = [
       /** @type {Map<string, number>} */
       const hints = new Map(counted((c.data?.items ?? []).map((i) => i.assignee ?? "").filter(Boolean)));
       for (const mem of /** @type {{ name: string }[]} */ (c.members?.value ?? [])) if (!hints.has(mem.name)) hints.set(mem.name, 0);
+      const users = want(`users|${c.org}`, orgUsersOf(c.org));
       return [
-        pickMany("members", [...hints.keys()].sort((a, b) => (hints.get(b) ?? 0) - (hints.get(a) ?? 0) || a.localeCompare(b)), { labels: (n) => (hints.get(n) ? `${n} · ${hints.get(n)} in sprint` : n), extra: "Add a display name, then Enter" }),
+        pickMany("members", [...hints.keys()].sort((a, b) => (hints.get(b) ?? 0) - (hints.get(a) ?? 0) || a.localeCompare(b)), {
+          labels: (n) => (hints.get(n) ? `${n} · ${hints.get(n)} in sprint` : n),
+          extra: users.value ? "Search everyone by name or email" : "Add a display name, then Enter",
+          suggest: /** @type {{ name: string, login: string }[] | undefined} */ (users.value),
+        }),
         listStatus(c.sprint, "the sprint's people"),
+        listStatus(users, "the organization's people"),
       ];
     },
     show: (c) => {
