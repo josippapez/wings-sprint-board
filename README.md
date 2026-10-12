@@ -67,7 +67,12 @@ With Wings connected to Claude Code (Plugins, Claude Code, Connect), Claude gets
 Make the package and drop it on the Wings window, or pick it under Plugins, Choose a file:
 
 ```sh
-git archive --format=zip --output sprint-board.wings-plugin HEAD
+npm install
+npm run check              # type-checks src/ and writes sprint-board.wings-plugin
 ```
 
 Then turn it on in Plugins.
+
+## Develop
+
+The code is TypeScript in `src/`: `src/main.ts` is the background check and `src/sidebar.tsx` the sidebar page, in React on `wings-plugin-sdk/ui`, with its own bits in `src/sidebar.css` and its modules in `src/lib/` and `src/components/`. The repo holds only source: `npm run check` builds the plugin into `sprint-board.wings-plugin` (with the generated `sidebar.html`), which isn't committed; a release builds it.

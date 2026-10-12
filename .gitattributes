@@ -1,6 +1,0 @@
-# Left out of the .wings-plugin package.
-.github export-ignore
-.gitattributes export-ignore
-README.md export-ignore
-.gitignore export-ignore
-wings.d.ts export-ignore

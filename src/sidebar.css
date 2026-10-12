@@ -1,0 +1,249 @@
+/* What's the Sprint board's own, next to the wings-plugin-ui components the page is built from. */
+
+#step-question {
+  outline: none;
+}
+.wrap {
+  overflow-wrap: anywhere;
+}
+.fg {
+  color: var(--wings-fg);
+}
+
+/* A work item's id and title, opening it in the sidebar. */
+button.link {
+  display: block;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+button.link:hover {
+  background: none;
+  text-decoration: underline;
+}
+button.link .id {
+  color: var(--wings-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A person's initials. */
+.avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--wings-fg);
+}
+.avatar.empty {
+  background: var(--wings-input);
+  color: var(--wings-muted);
+}
+
+/* Board rows: a state group's head, and items with a twisty for their children. */
+.group-head svg,
+.twisty svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  transition: transform 120ms;
+}
+.group-head.open svg,
+.twisty.open svg {
+  transform: rotate(90deg);
+}
+.group-head {
+  color: var(--wings-muted);
+}
+.item-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.item-row.child {
+  padding-left: 18px;
+}
+button.twisty,
+.twisty-space {
+  flex: none;
+  width: 18px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wings-muted);
+}
+button.twisty:hover {
+  background: none;
+  color: var(--wings-fg);
+}
+.item-main {
+  flex: 1;
+}
+.w-badge.state {
+  max-width: 84px;
+}
+.w-badge.talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.w-badge.talk::before {
+  content: "";
+  width: 7px;
+  height: 6px;
+  border: 1.2px solid currentColor;
+  border-radius: 2px 2px 2px 0;
+}
+
+/* An item: its sections, and Azure DevOps rich text rebuilt as text. */
+.detail-section {
+  padding-top: 10px;
+  border-top: 1px solid var(--wings-hairline);
+}
+.detail-section > .w-heading {
+  margin-top: 0;
+}
+.rich {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.rich p,
+.rich ul,
+.rich ol,
+.rich pre,
+.rich blockquote {
+  margin: 0 0 6px;
+}
+.rich ul,
+.rich ol {
+  padding-left: 18px;
+}
+.rich .heading {
+  font-weight: 600;
+}
+.rich pre,
+.rich code {
+  font: 11.5px var(--wings-mono);
+  white-space: pre-wrap;
+}
+.rich blockquote {
+  padding-left: 8px;
+  border-left: 2px solid var(--wings-hairline-strong);
+  color: var(--wings-muted);
+}
+.rich.clamp {
+  max-height: 180px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+.comment .rich {
+  padding-left: 26px;
+}
+button.inline-link {
+  display: inline;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wings-info);
+  font-weight: 400;
+  text-decoration: underline;
+}
+button.inline-link:hover {
+  background: none;
+}
+
+/* The setup stepper: dots for the steps, the detected notes, long checkbox lists and the people search. */
+.dots {
+  display: flex;
+  gap: 4px;
+}
+button.step-dot {
+  flex: 1;
+  height: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--wings-hairline-strong);
+}
+button.step-dot.done {
+  background: color-mix(in srgb, var(--wings-fg) 55%, transparent);
+}
+button.step-dot.current {
+  background: var(--wings-fg);
+}
+button.step-dot:disabled {
+  opacity: 0.4;
+}
+.detected {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.scroll {
+  max-height: 180px;
+  overflow: auto;
+  padding: 4px 6px;
+  border: 1px solid var(--wings-hairline);
+  border-radius: 8px;
+}
+/* The preview under a step: board rows, the sprint's state bar and the workflow. */
+.preview {
+  padding: 10px;
+  border: 1px dashed var(--wings-hairline-strong);
+  border-radius: 8px;
+}
+.preview .caption {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.preview-row {
+  min-height: 26px;
+}
+.preview-row.dim {
+  opacity: 0.4;
+}
+.preview-child {
+  padding-left: 16px;
+}
+.bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.flow-step {
+  padding: 3px 8px;
+  border-left: 2px solid var(--wings-hairline-strong);
+  color: var(--wings-muted);
+}
+.flow-step.review {
+  border-left-color: var(--wings-info);
+  color: var(--wings-fg);
+}
+.flow-card {
+  padding: 6px 8px;
+  border: 1px solid var(--wings-hairline-strong);
+  border-radius: 6px;
+  background: var(--wings-surface);
+  color: var(--wings-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group-head svg,
+  .twisty svg {
+    transition: none;
+  }
+}

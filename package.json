@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc && wings-plugin pack"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "~6.0.3",
+    "wings-plugin-sdk": "^0.6.0",
+    "wings-plugin-ui": "^0.1.1"
+  }
+}

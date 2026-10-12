@@ -21,10 +21,12 @@ jobs:
             echo "Tag $GITHUB_REF_NAME doesn't match version $version in wings-plugin.json"
             exit 1
           fi
-      - name: Package and release
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Build and package
+        run: npm ci && npm run check
+      - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          id=$(jq -r .id wings-plugin.json)
-          git archive --format=zip --output "$id.wings-plugin" HEAD
-          gh release create "$GITHUB_REF_NAME" "$id.wings-plugin" --verify-tag --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" "$(jq -r .id wings-plugin.json).wings-plugin" --verify-tag --generate-notes
