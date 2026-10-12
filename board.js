@@ -364,6 +364,86 @@ function richText(html) {
   return out;
 }
 
+/** A link as richText draws one: Azure DevOps links open, other web links show their address. @param {string} text @param {string} href */
+const linkNode = (text, href) =>
+  /^https:\/\/dev\.azure\.com\//.test(href)
+    ? h("button", { class: "inline-link", type: "button", title: href, onclick: () => void wings.openUrl(href) }, text)
+    : h("span", {}, text, /^https?:/.test(href) && href !== text ? h("span", { class: "muted" }, ` (${href})`) : "");
+
+const mdInline = /!\[([^\]]*)\]\([^)\s]*\)|\[([^\]]+)\]\(([^)\s]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*\s][^*]*)\*/g;
+
+/** Inline code, bold, italics and links as nodes. An image shows as [image], like in rich text. @param {string} src */
+function markdownInline(src) {
+  /** @type {(Node | string)[]} */
+  const out = [];
+  let at = 0;
+  for (const m of src.matchAll(mdInline)) {
+    if (m.index > at) out.push(src.slice(at, m.index));
+    at = m.index + m[0].length;
+    if (m[0].startsWith("!")) out.push(h("span", { class: "muted" }, "[image]"));
+    else if (m[2] !== undefined) out.push(linkNode(m[2], m[3]));
+    else if (m[4] !== undefined) out.push(h("code", {}, m[4]));
+    else if (m[5] !== undefined) out.push(h("strong", {}, ...markdownInline(m[5])));
+    else out.push(h("em", {}, m[6]));
+  }
+  if (at < src.length) out.push(src.slice(at));
+  return out;
+}
+
+/**
+ * Azure DevOps markdown fields as page nodes: headings, paragraphs, lists, fenced code, quotes and rules, built as
+ * new elements from the text. Raw HTML in it shows as text, never as markup.
+ * @param {string} src
+ */
+function markdownText(src) {
+  const out = h("div", { class: "rich" });
+  // Azure DevOps keeps <, >, " and & in markdown fields as HTML entities. Decoded to text, they stay text.
+  const named = /** @type {Record<string, string>} */ ({ lt: "<", gt: ">", quot: '"', apos: "'", amp: "&", nbsp: " " });
+  const text = src.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (m, e) =>
+    e[0] === "#" ? String.fromCodePoint(parseInt(e.slice(e[1].toLowerCase() === "x" ? 2 : 1), e[1].toLowerCase() === "x" ? 16 : 10) || 0xfffd) : (named[e.toLowerCase()] ?? m),
+  );
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  /** @type {string[]} */
+  let para = [];
+  /** @type {HTMLElement | null} */
+  let list = null;
+  const flush = () => {
+    if (para.length) out.append(h("p", {}, ...markdownInline(para.join(" "))));
+    para = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const item = /^\s*(?:([-*+])|\d+[.)])\s+(.*)$/.exec(line);
+    if (!item && line.trim()) list = null;
+    if (/^\s*(```|~~~)/.test(line)) {
+      flush();
+      const code = [];
+      while (++i < lines.length && !/^\s*(```|~~~)/.test(lines[i])) code.push(lines[i]);
+      out.append(h("pre", {}, h("code", {}, code.join("\n"))));
+    } else if (!line.trim()) flush();
+    else if (/^#{1,6}\s/.test(line)) {
+      flush();
+      out.append(h("p", { class: "heading" }, ...markdownInline(line.replace(/^#{1,6}\s+/, "").replace(/\s+#+\s*$/, ""))));
+    } else if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
+      flush();
+      out.append(h("hr"));
+    } else if (item) {
+      flush();
+      const tag = item[1] ? "ul" : "ol";
+      if (!list || list.tagName.toLowerCase() !== tag) out.append((list = h(tag)));
+      list.append(h("li", {}, ...markdownInline(item[2])));
+    } else if (line.startsWith(">")) {
+      flush();
+      out.append(h("blockquote", {}, ...markdownInline(line.replace(/^>\s?/, ""))));
+    } else para.push(line.trim());
+  }
+  flush();
+  return out;
+}
+
+/** Whether a long-text field holds markdown: `az boards work-item show` says so in multilineFieldsFormat. @param {any} d @param {string} field */
+const isMarkdown = (d, field) => String(d?.item?.multilineFieldsFormat?.[field] ?? "").toLowerCase() === "markdown";
+
 /** Sections shown in full, by item and name; long ones start cut short. @type {Set<string>} */
 const unclamped = new Set();
 
@@ -375,11 +455,12 @@ function clampable(key, body) {
   return [body, more];
 }
 
-/** @param {number} id @param {string} name @param {string} html */
-const richSection = (id, name, html) => h("section", { class: "detail-section" }, h("h2", {}, name), ...clampable(`${id}:${name}`, richText(html)));
+/** @param {number} id @param {string} name @param {string} text @param {boolean} [markdown] the field holds markdown, not HTML */
+const richSection = (id, name, text, markdown = false) =>
+  h("section", { class: "detail-section" }, h("h2", {}, name), ...clampable(`${id}:${name}`, markdown ? markdownText(text) : richText(text)));
 
-/** A comment's body: HTML ones as rich text, markdown ones as their plain text. @param {any} c */
-const commentBody = (c) => (c.format === "markdown" ? h("div", { class: "rich plain" }, String(c.text ?? "")) : richText(String(c.renderedText || c.text || "")));
+/** A comment's body, as rich text or markdown. @param {any} c */
+const commentBody = (c) => (c.format === "markdown" ? markdownText(String(c.text ?? "")) : richText(String(c.renderedText || c.text || "")));
 
 /** @param {string} label @param {Node | string | null} value */
 const meta = (label, value) => (value ? h("div", { class: "meta-row" }, h("span", { class: "meta-label" }, label), h("div", { class: "meta-value" }, value)) : null);
@@ -443,8 +524,10 @@ function renderDetail() {
     ),
     d?.loading ? h("div", { class: "row muted" }, spinner(), "Loading details and comments…") : null,
     d?.error ? h("p", { class: "error", role: "alert" }, `Couldn't read the item: ${d.error}`) : null,
-    f["System.Description"] ? richSection(id, "Description", String(f["System.Description"])) : null,
-    f["Microsoft.VSTS.Common.AcceptanceCriteria"] ? richSection(id, "Acceptance criteria", String(f["Microsoft.VSTS.Common.AcceptanceCriteria"])) : null,
+    f["System.Description"] ? richSection(id, "Description", String(f["System.Description"]), isMarkdown(d, "System.Description")) : null,
+    f["Microsoft.VSTS.Common.AcceptanceCriteria"]
+      ? richSection(id, "Acceptance criteria", String(f["Microsoft.VSTS.Common.AcceptanceCriteria"]), isMarkdown(d, "Microsoft.VSTS.Common.AcceptanceCriteria"))
+      : null,
     d?.item
       ? h(
           "section",
