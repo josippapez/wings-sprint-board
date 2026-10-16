@@ -1,4 +1,6 @@
-import { az, counter, linked, loadStates, pool, PREDECESSOR, pullRequestIds, query, RELATED, relations, type Item } from "./azure";
+import { mapLimit } from "wings-plugin-sdk/async";
+
+import { az, counter, linked, loadStates, PARALLEL, PREDECESSOR, pullRequestIds, query, RELATED, relations, type Item } from "./azure";
 import { itemUrl, list, lower, quote, validate, type Settings } from "./settings";
 
 const NOT_COVERED = ["Blocked but not marked: it needs comments read and judged, so it's left to you."];
@@ -109,7 +111,7 @@ export async function boardCheck(s: Settings) {
 
   // Links: in-scope stories and other items always; children only when a PR decides their check.
   const needsLinks = [...scopeStories, ...otherItems, ...storyChildren.filter(prDecides)];
-  const rels = new Map(await pool(needsLinks, async (i) => [i.id, await relations(i.id, s)] as const));
+  const rels = new Map(await mapLimit(needsLinks, PARALLEL, async (i) => [i.id, await relations(i.id, s)] as const));
   for (const story of scopeStories) {
     const r = rels.get(story.id) ?? [];
     for (const id of [...linked(r, PREDECESSOR), ...linked(r, RELATED)]) depIds.add(id);
@@ -123,7 +125,7 @@ export async function boardCheck(s: Settings) {
   }
   const deps = [...depIds].map((id) => items.get(id)).filter((d): d is Item => !!d && d.state !== "Removed");
   const depLinks = deps.filter((d) => prDecides(d) && !rels.has(d.id));
-  for (const [id, r] of await pool(depLinks, async (d) => [d.id, await relations(d.id, s)] as const)) rels.set(id, r);
+  for (const [id, r] of await mapLimit(depLinks, PARALLEL, async (d) => [d.id, await relations(d.id, s)] as const)) rels.set(id, r);
 
   // Pull requests of everything whose state a PR decides.
   const prIds = new Set<number>();
@@ -132,7 +134,7 @@ export async function boardCheck(s: Settings) {
     if (item && prDecides(item)) for (const pr of pullRequestIds(r)) prIds.add(pr);
   }
   const prs = new Map<number, { status: string; title: string }>(
-    await pool([...prIds], async (id) => {
+    await mapLimit([...prIds], PARALLEL, async (id) => {
       const pr = await az<{ status?: unknown; title?: unknown }>(["repos", "pr", "show", "--id", String(id), "--detect", "false"], s);
       return [id, { status: String(pr?.status ?? ""), title: String(pr?.title ?? "") }] as const;
     }),

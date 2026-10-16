@@ -2,6 +2,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "wings-plugin dev",
+    "build": "wings-plugin build",
+    "pack": "wings-plugin pack",
     "check": "tsc && wings-plugin pack"
   },
   "devDependencies": {
@@ -10,7 +13,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "~6.0.3",
-    "wings-plugin-sdk": "^0.6.0",
-    "wings-plugin-ui": "^0.1.1"
+    "wings-plugin-sdk": "^0.18.0",
+    "wings-plugin-ui": "^0.11.0"
   }
 }

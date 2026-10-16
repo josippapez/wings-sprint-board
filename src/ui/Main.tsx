@@ -2,10 +2,11 @@
 
 import { Button, Row, Stack, Tabs, Text, Title } from "wings-plugin-ui";
 
-import { board, saveView } from "../lib/board";
+import { board, saveView } from "./board";
 import { day, time } from "../lib/format";
-import { page, render } from "../lib/page";
-import { openSettings } from "../lib/setup";
+import { ch } from "../lib/messages";
+import { page, render } from "./page";
+import { openSettings } from "./setup";
 import { errorLine } from "./bits";
 import { renderList } from "./BoardList";
 import { renderChecks } from "./Checks";
@@ -26,7 +27,7 @@ export function renderMain() {
           <Title truncate>{r?.sprint?.name ?? snapshot?.sprint.name ?? "Sprint"}</Title>
           <Text tone="muted" size="small" truncate>{r ? `${day(r.sprint.start)} – ${day(r.sprint.finish)} · ${running ? "checking…" : `checked ${time(r.checkedAt)}`}` : ""}</Text>
         </Stack>
-        <Button variant="ghost" busy={running} title="Read the board again" onClick={() => void wings.broadcast({ type: "refresh" })}>
+        <Button variant="ghost" busy={running} title="Read the board again" onClick={() => void ch.tell("refresh")}>
           Refresh
         </Button>
         <Button variant="ghost" onClick={() => openSettings()}>Settings</Button>

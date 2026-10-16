@@ -2,10 +2,11 @@
 
 import { Badge, Empty, ListButton, Row, SearchField, Select, Stack, Text } from "wings-plugin-ui";
 
-import { board, isOpen, openItem, saveView, stateInfo, toggle, typeColor, type BoardItem } from "../lib/board";
-import { meOf, need } from "../lib/lists";
-import { render } from "../lib/page";
+import { board, isOpen, openItem, saveView, stateInfo, toggle, typeColor, type BoardItem } from "./board";
+import { meOf } from "../lib/lists";
+import { render } from "./page";
 import { avatar, CARET, dot, icon, spinner } from "./bits";
+import { need } from "./want";
 
 const CATEGORY_ORDER = ["Proposed", "InProgress", "Resolved", "Completed", "Removed"];
 
@@ -118,7 +119,7 @@ export function renderList() {
   const snapshot = board.snapshot;
   if (!snapshot) return [<Row key="loading">{spinner()}<Text tone="muted">Reading the sprint board…</Text></Row>];
   const { who, type } = filters();
-  if (who === "mine" && board.meLogin === null) void need("me", meOf()).then((me) => ((board.meLogin = me.toLowerCase()), render()), () => ((board.meLogin = ""), render()));
+  if (who === "mine" && board.meLogin === null) void need(meOf, "me").then((me) => ((board.meLogin = me.toLowerCase()), render()), () => ((board.meLogin = ""), render()));
   const meLogin = board.meLogin;
   const q = view.q.trim().toLowerCase();
   const match = (i: BoardItem) =>

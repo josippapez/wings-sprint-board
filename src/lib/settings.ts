@@ -1,3 +1,5 @@
+import { setting } from "wings-plugin-sdk/settings";
+
 /** Settings start empty or with neutral defaults. Empty lists and fields turn their check off. */
 export const DEFAULTS = {
   org: "",
@@ -26,10 +28,11 @@ export const DEFAULTS = {
 
 export type Settings = typeof DEFAULTS;
 
-export async function loadSettings(): Promise<Settings> {
-  const saved = await wings.storage.get("settings");
-  return { ...DEFAULTS, ...(saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {}) };
-}
+/** What the settings steps save. Main reads it and hears it change, and the sidebar writes it. */
+export const savedSettings = setting<Settings>("settings", {
+  default: DEFAULTS,
+  check: (value) => (value && typeof value === "object" && !Array.isArray(value) ? { ...DEFAULTS, ...value } : undefined),
+});
 
 /** What's still missing before a check can run. */
 export const missingSettings = (s: Settings) =>

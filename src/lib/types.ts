@@ -1,7 +1,7 @@
 import type { Result } from "./check";
 import type { Settings } from "./settings";
 
-/** What main.js knows, and sends the sidebar with wings.broadcast. */
+/** What main knows, and serves the sidebar as the `state` query. */
 export interface MainState {
   phase: "loading" | "setup" | "signed-out" | "error" | "ready";
   settings: Settings;
@@ -11,11 +11,31 @@ export interface MainState {
   running: boolean;
 }
 
-/** The state as the sidebar gets it: the board itself goes through storage, so the result comes without it. */
+/** The state as the sidebar gets it: the board has a query of its own, so the result comes without it. */
 export type Published = Omit<MainState, "result"> & { result: Omit<Result, "snapshot"> | null };
 
-/** A message from main.js to the sidebar. */
-export interface StateMessage {
-  type: "state";
-  state: Published;
+export interface BoardItem {
+  id: number;
+  rev: number;
+  title: string;
+  type: string;
+  state: string;
+  category: string;
+  assignee: string | null;
+  login: string | null;
+  parent: number | null;
+  tags: string[];
+  blocked: boolean;
+  blockedBy: string | null;
+  comments: number;
+  prs: { id: number; status: string }[] | null;
+  checks: string[];
+}
+
+/** The board as the last check read it. */
+export interface Snapshot {
+  checkedAt: string;
+  sprint: { name: string; start: string | null; finish: string | null };
+  items: BoardItem[];
+  types: Record<string, { color: string; states: { name: string; category: string; color: string }[] }>;
 }

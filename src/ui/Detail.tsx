@@ -3,10 +3,10 @@
 import type { ReactElement, ReactNode } from "react";
 import { Badge, Button, Heading, ListButton, Properties, Row, Stack, Text, Title } from "wings-plugin-ui";
 
-import { back, board, byId, details, openItem, stateInfo, typeColor, workItemUrl, type CommentJson, type Detail } from "../lib/board";
+import { back, board, byId, details, openItem, stateInfo, typeColor, workItemUrl, type CommentJson, type Detail } from "./board";
 import { ago } from "../lib/format";
-import { page, render } from "../lib/page";
-import { markdownText, richText, textOf } from "../lib/richText";
+import { page, render } from "./page";
+import { markdownText, richText, textOf } from "./richText";
 import { avatar, dot, errorLine, spinner } from "./bits";
 import { prTone } from "./BoardList";
 

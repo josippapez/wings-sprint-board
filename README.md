@@ -75,4 +75,4 @@ Then turn it on in Plugins.
 
 ## Develop
 
-The code is TypeScript in `src/`: `src/main.ts` is the background check and `src/sidebar.tsx` the sidebar page, in React on `wings-plugin-sdk/ui`, with its own bits in `src/sidebar.css` and its modules in `src/lib/` and `src/components/`. The repo holds only source: `npm run check` builds the plugin into `sprint-board.wings-plugin` (with the generated `sidebar.html`), which isn't committed; a release builds it.
+The code is TypeScript in `src/`: `src/main.ts` is the background check, `src/tools.ts` the tool Claude gets, `src/pages/sidebar.tsx` the sidebar page (React on `wings-plugin-ui`, with its own bits in `sidebar.css`), `src/main/` the check's state, `src/ui/` the sidebar's components and `src/lib/` the logic and the messages between main and the page. `preview/sidebar.tsx` has fixtures for `npx wings-plugin shot`. The repo holds only source: `npm run check` builds the plugin into `sprint-board.wings-plugin`, which isn't committed, and a release builds it. `npm run dev` rebuilds on each save and has Wings restart the plugin.

@@ -2,9 +2,9 @@
 
 import { Badge, Card, Heading, List, ListItem, Row, Stack, Text, Title } from "wings-plugin-ui";
 
-import { openItem } from "../lib/board";
+import { openItem } from "./board";
 import type { Finding } from "../lib/check";
-import { page } from "../lib/page";
+import { page } from "./page";
 import type { Published } from "../lib/types";
 
 type Person = NonNullable<Published["result"]>["people"][number];

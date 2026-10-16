@@ -2,8 +2,8 @@
 
 import { Button, Card, Disclosure, Row, Text, Title } from "wings-plugin-ui";
 
-import { page, render } from "../lib/page";
-import { context, detect, save, setup } from "../lib/setup";
+import { page, render } from "./page";
+import { context, detect, save, setup } from "./setup";
 import { errorLine, spinner } from "./bits";
 import { STEPS } from "./Steps";
 

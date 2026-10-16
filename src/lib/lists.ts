@@ -1,7 +1,9 @@
-// az, git and the list cache of the sidebar. Lists read from Azure DevOps are kept in memory per organization
-// and project, so a render never asks for them again.
+// The lists the settings steps read from Azure DevOps, each kept in memory per organization, project and team, so a
+// render never asks for them again.
 
-import { render } from "./page";
+import { cached } from "wings-plugin-sdk/async";
+
+import { azJson } from "./azure";
 
 export interface WorkItemType {
   name: string;
@@ -54,92 +56,33 @@ type RowJson = { id: number; fields?: Record<string, unknown> & { "System.Assign
 
 const POINT_FIELDS = ["Microsoft.VSTS.Scheduling.StoryPoints", "Microsoft.VSTS.Scheduling.Effort", "Microsoft.VSTS.Scheduling.Size"];
 
-/** Counts az calls, for what detection reports. */
-export const counter = { calls: 0 };
-
-// ---------- az, git and the list cache ----------
-
-export class AzError extends Error {
-  login: boolean;
-  constructor(message: string, login: boolean) {
-    super(message);
-    this.login = login;
-  }
-}
-
 export const orgUrl = (org: string) => org.trim().replace(/\/+$/, "");
 export const validOrg = (org: string) => /^https:\/\/dev\.azure\.com\/[\w.-]+\/?$/.test(org.trim());
 /** Wings refuses az arguments starting with "-" or "@". */
 export const safeArg = (v: string) => !!v.trim() && !/^[-@]/.test(v);
 
-/** A read-only az call. */
-export async function az<T = unknown>(args: string[], org: string | null): Promise<T | null> {
-  counter.calls++;
-  const out = await wings.exec("az", [...args, ...(org ? ["--organization", orgUrl(org)] : []), "-o", "json"], { timeoutMs: 60_000 });
-  if (out.code !== 0) {
-    const message = out.stderr.trim().split("\n").filter((l) => l && !/^WARNING/.test(l)).at(-1) || `az exited with ${out.code}`;
-    throw new AzError(message, /login/i.test(out.stderr));
-  }
-  return out.stdout.trim() ? (JSON.parse(out.stdout) as T) : null;
-}
+const az = azJson;
 
 export const invoke = <T = unknown>(org: string | null, resource: string, route: string[], query: string[] = [], area = "wit", version = "7.1") =>
   az<T>(["devops", "invoke", "--area", area, "--resource", resource, "--route-parameters", ...route, ...(query.length ? ["--query-parameters", ...query] : []), "--api-version", version], org);
 
-interface Entry {
-  value?: unknown;
-  error?: string;
-  promise?: Promise<unknown>;
+/** What names a project's lists. */
+interface Project {
+  org: string;
+  project: string;
 }
-/** Loaded lists by key: { value } once loaded, { error } if it failed, or a pending promise. */
-const lists = new Map<string, Entry>();
-
-export type Loaded<T> = { value?: T; error?: string; loading: boolean };
-
-/** Loads a list once and re-renders when it lands. Returns what's known now. */
-export function want<T>(key: string, load: () => Promise<T>): Loaded<T> {
-  let entry = lists.get(key);
-  if (!entry) {
-    entry = {};
-    const e = entry;
-    e.promise = load().then(
-      (value) => {
-        e.value = value;
-        delete e.promise;
-        render();
-        return value;
-      },
-      (error: unknown) => {
-        e.error = String((error as Error | null)?.message ?? error);
-        delete e.promise;
-        render();
-        throw error;
-      },
-    );
-    // Rendering reads the entry; a failed load shows as a message, so nothing waits on this promise.
-    e.promise.catch(() => {});
-    lists.set(key, entry);
-  }
-  // The key says what was loaded, so its value is the T its loader returns.
-  return { value: entry.value as T | undefined, error: entry.error, loading: !!entry.promise };
+interface Team extends Project {
+  team: string;
 }
+const byJson = { key: JSON.stringify };
 
-/** Waits for a list, for detection. */
-export async function need<T>(key: string, load: () => Promise<T>): Promise<T> {
-  want(key, load);
-  const entry = lists.get(key)!;
-  if (entry.promise) return entry.promise as Promise<T>;
-  if (entry.error) throw new Error(entry.error);
-  return entry.value as T;
-}
-
-export const projectsOf = (org: string) => async () => {
+export const projectsOf = cached(async (org: string) => {
   const out = await az<{ value?: Named[] } | Named[]>(["devops", "project", "list", "--top", "500"], org);
   return ((out && !Array.isArray(out) ? out.value : undefined) ?? (out as Named[] | null) ?? []).map((p) => String(p.name)).sort();
-};
+});
 
 /** Types with their states, type categories, fields, tags, teams and your teams: six calls, once per project. */
-export const metaOf = (org: string, project: string) => async () => {
+export const metaOf = cached(async ({ org, project }: Project) => {
   const route = [`project=${project}`];
   const [types, categories, fields, tags, teams, mine] = await Promise.all([
     invoke<{ value?: TypeJson[] }>(org, "workItemTypes", route),
@@ -165,7 +108,7 @@ export const metaOf = (org: string, project: string) => async () => {
     myTeams: (mine?.value ?? []).map((t) => String(t.name)),
   };
   return meta;
-};
+}, byJson);
 
 /** Text fields that could hold a blocking ticket: their name or reference name says "block". */
 const blockFieldsOf = (meta: ProjectMeta) => meta.fields.filter((f) => ["string", "plainText"].includes(f.type) && /block/i.test(`${f.ref} ${f.name}`)).map((f) => f.ref);
@@ -178,8 +121,8 @@ function areaClause(area: AreaJson | null, q: (v: string) => string) {
 }
 
 /** The team's current sprint and its items, with the fields detection looks at. Three calls. */
-export const sprintOf = (org: string, project: string, team: string) => async () => {
-  const meta = await need(`meta|${org}|${project}`, metaOf(org, project));
+export const sprintOf = cached(async ({ org, project, team }: Team) => {
+  const meta = await metaOf.get({ org, project });
   const [iterations, area] = await Promise.all([
     az<IterationJson[]>(["boards", "iteration", "team", "list", "--team", team, "--timeframe", "current", "--project", project], org),
     az<AreaJson>(["boards", "area", "team", "list", "--team", team, "--project", project], org),
@@ -215,24 +158,24 @@ export const sprintOf = (org: string, project: string, team: string) => async ()
     }),
   };
   return data;
-};
+}, byJson);
 
-export const teamMembersOf = (org: string, project: string, team: string) => async (): Promise<Person[]> => {
+export const teamMembersOf = cached(async ({ org, project, team }: Team): Promise<Person[]> => {
   const out = await az<{ identity?: { isContainer?: boolean; displayName?: string; uniqueName?: string } }[]>(["devops", "team", "list-member", "--team", team, "--project", project, "--top", "500"], org);
   return (out ?? [])
     .map((m) => m.identity ?? {})
     .filter((i) => !i.isContainer && i.displayName)
     .map((i) => ({ name: String(i.displayName), login: String(i.uniqueName ?? "") }));
-};
+}, byJson);
 
 /** Everyone in the organization, so the people step can find someone who isn't in the team or the sprint. */
-export const orgUsersOf = (org: string) => async (): Promise<Person[]> => {
+export const orgUsersOf = cached(async (org: string): Promise<Person[]> => {
   const out = await az<{ members?: { user?: { displayName?: string; subjectKind?: string; mailAddress?: string; principalName?: string } }[] }>(["devops", "user", "list", "--top", "10000"], org);
   return (out?.members ?? [])
     .map((m) => m.user ?? {})
     .filter((u) => u.displayName && u.subjectKind !== "group")
     .map((u) => ({ name: String(u.displayName), login: String(u.mailAddress || u.principalName || "") }));
-};
+});
 
 /** The signed-in az account, read locally. */
-export const meOf = () => async () => String((await az(["account", "show", "--query", "user.name"], null)) ?? "");
+export const meOf = cached(async (_key: string) => String((await az(["account", "show", "--query", "user.name"], null)) ?? ""));

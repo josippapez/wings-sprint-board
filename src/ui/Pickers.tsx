@@ -4,8 +4,8 @@ import { useReducer, type ChangeEvent, type ComponentProps, type ReactNode } fro
 import { Checkbox, Combobox, Field, FieldGroup, Row, Select, Stack, Text, TextInput } from "wings-plugin-ui";
 
 import type { Person } from "../lib/lists";
-import { render } from "../lib/page";
-import { settle, setup, type ListKey, type TextKey } from "../lib/setup";
+import { render } from "./page";
+import { settle, setup, type ListKey, type TextKey } from "./setup";
 import { spinner } from "./bits";
 
 /**

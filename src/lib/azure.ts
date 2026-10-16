@@ -1,8 +1,10 @@
+import { cached, errorMessage } from "wings-plugin-sdk/async";
+import { cli } from "wings-plugin-sdk/cli";
+
 import { org, type Settings } from "./settings";
 
-const PARALLEL = 6;
-
-export class SignedOut extends Error {}
+/** How many az calls run at once. */
+export const PARALLEL = 6;
 
 export interface Item {
   id: number;
@@ -43,33 +45,29 @@ interface WorkItemTypeJson {
 
 // ---------- az ----------
 
+/** The Azure CLI, with "not installed" and "signed out" told apart from a failure. */
+export const azCli = cli("az", { signedOut: /login/i, signIn: ["login", "--allow-no-subscriptions", "--output", "none"] });
+
 /** Counts az calls in the current check, for the report. */
 export const counter = { calls: 0 };
 
-/** Runs a read-only az command and parses its JSON. */
-export async function az<T = unknown>(args: string[], s: Settings, timeoutMs = 60_000): Promise<T | null> {
+/** Runs a read-only az command for an organization (none for a local one like `az account show`) and parses its JSON. */
+export function azJson<T = unknown>(args: string[], organization: string | null): Promise<T | null> {
   counter.calls++;
-  const out = await wings.exec("az", [...args, "--organization", org(s), "-o", "json"], { timeoutMs });
-  if (out.code !== 0) {
-    const message = out.stderr.trim().split("\n").filter((l) => l && !/^WARNING/.test(l)).at(-1) || `az exited with ${out.code}`;
-    if (/login/i.test(out.stderr)) throw new SignedOut(message);
-    throw new Error(message);
-  }
-  return out.stdout.trim() ? (JSON.parse(out.stdout) as T) : null;
+  return azCli.json<T | null>([...args, ...(organization ? ["--organization", organization] : []), "-o", "json"], {
+    timeoutMs: 60_000,
+    key: organization ?? undefined,
+    empty: null,
+  });
 }
 
-/** Runs fn over items, a few at a time. */
-export async function pool<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(PARALLEL, items.length) }, worker));
-  return results;
+/** `azJson` for the organization of the settings. */
+export const az = <T = unknown>(args: string[], s: Settings) => azJson<T>(args, org(s));
+
+/** What went wrong, in one line: the last line of az's message that isn't a warning. */
+export function failure(error: unknown) {
+  const text = errorMessage(error);
+  return text.split("\n").map((l) => l.trim()).filter((l) => l && !/^WARNING/.test(l)).at(-1) || text;
 }
 
 const fields = (s: Settings) =>
@@ -135,24 +133,24 @@ export interface TypeInfo {
   color: string;
   states: StateInfo[];
 }
-/** Each project's work item types: their colour, and their states in board order with each state's category (Proposed, InProgress, Resolved, Completed, Removed) and colour. Kept per project, since a process rarely changes. */
-const typeStates = new Map<string, Map<string, TypeInfo>>();
-
-/** One call reads every type of the project with its states. */
-export async function loadStates(s: Settings) {
-  const key = `${s.org}|${s.project}`;
-  if (!typeStates.has(key)) {
+/** Each project's work item types: their colour, and their states in board order with each state's category (Proposed, InProgress, Resolved, Completed, Removed) and colour. Read once per project, since a process rarely changes. */
+const projectTypes = cached(
+  async (s: Settings) => {
     const out = await az<{ value?: WorkItemTypeJson[] }>(["devops", "invoke", "--area", "wit", "--resource", "workItemTypes", "--route-parameters", `project=${s.project}`, "--api-version", "7.1"], s);
     const hex = (c: unknown) => (/^[0-9a-f]{6}$/i.test(String(c)) ? `#${c}` : "#888888");
-    const types = new Map(
+    return new Map(
       (out?.value ?? []).map((t): [string, TypeInfo] => [
         String(t.name),
         { color: hex(t.color), states: (t.states ?? []).map((x) => ({ name: String(x.name), category: String(x.category), color: hex(x.color) })) },
       ]),
     );
-    typeStates.set(key, types);
-  }
-  const types = typeStates.get(key)!;
+  },
+  { key: (s) => `${s.org}|${s.project}` },
+);
+
+/** One call reads every type of the project with its states. */
+export async function loadStates(s: Settings) {
+  const types = await projectTypes.get(s);
   const category = (item: { type: string; state: string }) => types.get(item.type)?.states.find((x) => x.name === item.state)?.category ?? "";
   /** The first state of a type in this category, like "In Progress". */
   const firstOf = (type: string, cat: string) => types.get(type)?.states.find((x) => x.category === cat)?.name ?? null;

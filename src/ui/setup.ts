@@ -2,9 +2,16 @@
 // it for one click, and offers pickers to correct any of it. sidebar.tsx draws the board and calls
 // renderSettings, openSettings and maybeDetect from here.
 
-import { counter, metaOf, meOf, need, orgUrl, projectsOf, safeArg, sprintOf, teamMembersOf, validOrg, want, type Loaded, type Person, type ProjectMeta, type SprintData, type SprintItem } from "./lists";
+import { cached } from "wings-plugin-sdk/async";
+import { azureApiOrg, gitOk, parseRemote } from "wings-plugin-sdk/git";
+
+import { CliError } from "wings-plugin-sdk/cli";
+
+import { counter, failure } from "../lib/azure";
+import { metaOf, meOf, orgUrl, projectsOf, safeArg, sprintOf, teamMembersOf, validOrg, type Person, type ProjectMeta, type SprintData, type SprintItem } from "../lib/lists";
+import { savedSettings, type Settings } from "../lib/settings";
 import { page, render } from "./page";
-import type { Settings } from "./settings";
+import { need, want, type Loaded } from "./want";
 
 /** Categories of types that aren't board work, like test cases and code review requests. */
 const NOT_WORK = /Hidden|Test|SharedStep|SharedParameter|CodeReview|Feedback|Epic|Feature/;
@@ -36,26 +43,16 @@ export const setup = {
 
 // ---------- open repos ----------
 
-/** Same patterns as Wings' pr-tracker. A visualstudio.com organization is the same one at dev.azure.com. */
-function azureRemote(url: string) {
-  let m = url.match(/ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?$/);
-  if (!m) m = url.match(/dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+?)(?:\.git)?$/);
-  if (!m) m = url.match(/([^/.@]+)\.visualstudio\.com\/(?:DefaultCollection\/)?([^/]+)\/_git\/([^/]+?)(?:\.git)?$/);
-  return m ? { org: `https://dev.azure.com/${m[1]}`, project: decodeURIComponent(m[2]) } : null;
-}
-
-/** Remotes by folder, read once each. */
-const remotes = new Map<string, Promise<{ org: string; project: string } | null>>();
+/** The Azure DevOps organization and project a folder's origin is in, or null. A folder is read once. */
+const remotes = cached(async (cwd: string) => {
+  const remote = parseRemote((await gitOk(cwd, ["remote", "get-url", "origin"])) ?? "");
+  return remote.kind === "azure" ? { org: azureApiOrg(remote.org), project: remote.project } : null;
+});
 
 async function findRepos() {
   const cwds = [...new Set((setup.panes ?? []).map((p) => String(p.cwd)).filter(Boolean))].slice(0, 12);
   const found = await Promise.all(
-    cwds.map((cwd) => {
-      if (!remotes.has(cwd)) {
-        remotes.set(cwd, wings.exec("git", ["remote", "get-url", "origin"], { cwd }).then((out) => (out.code === 0 ? azureRemote(out.stdout.trim()) : null), () => null));
-      }
-      return remotes.get(cwd);
-    }),
+    cwds.map((cwd) => remotes.get(cwd)),
   );
   const counts = new Map<string, { org: string; project: string; panes: number }>();
   for (const r of found) {
@@ -99,13 +96,13 @@ export async function detect() {
 
     setup.detecting!.step = "Reading the project's teams, types and fields…";
     render();
-    const meta = await need(`meta|${org}|${project}`, metaOf(org, project));
+    const meta = await need(metaOf, { org, project });
     let team = base.team?.trim() || "";
     if (!team) {
       // Of your teams with a current sprint, the one with the most items, then the most of them yours.
       const [me, sprints] = await Promise.all([
-        need("me", meOf()).catch(() => ""),
-        Promise.all(meta.myTeams.slice(0, 5).map((t) => need(`sprint|${org}|${project}|${t}`, sprintOf(org, project, t)).then((d) => ({ t, d }), () => null))),
+        need(meOf, "me").catch(() => ""),
+        Promise.all(meta.myTeams.slice(0, 5).map((t) => need(sprintOf, { org, project, team: t }).then((d) => ({ t, d }), () => null))),
       ]);
       const mine = (d: SprintData) => d.items.filter((i) => !!me && i.assigneeLogin?.toLowerCase() === me.toLowerCase()).length;
       const best = sprints.filter((x) => !!x).sort((a, b) => b.d.items.length - a.d.items.length || mine(b.d) - mine(a.d))[0];
@@ -123,15 +120,15 @@ export async function detect() {
     setup.detecting!.step = "Reading the team's current sprint…";
     render();
     const [data, members, me] = await Promise.all([
-      need(`sprint|${org}|${project}|${team}`, sprintOf(org, project, team)),
-      need(`members|${org}|${project}|${team}`, teamMembersOf(org, project, team)),
-      need("me", meOf()).catch(() => ""),
+      need(sprintOf, { org, project, team }),
+      need(teamMembersOf, { org, project, team }),
+      need(meOf, "me").catch(() => ""),
     ]);
     const settings = infer(meta, data, members, me, notes, off);
     return finish({ ...settings, org, project, team, areaPath: base.areaPath ?? "" }, notes, off, started);
   } catch (error) {
-    setup.detectError = String((error as Error | null)?.message ?? error);
-    if ((error as { login?: boolean } | null)?.login) setup.detectError = `az isn't signed in. ${setup.detectError}`;
+    setup.detectError = failure(error);
+    if (error instanceof CliError && error.kind === "signed-out") setup.detectError = `az isn't signed in. ${setup.detectError}`;
     setup.detecting = null;
     if (!setup.draft) setup.draft = defaultsFrom(page.main?.settings ?? {});
     render();
@@ -255,9 +252,9 @@ export async function save() {
     staleDays: Math.max(1, Math.round(Number(d.staleDays) || 3)),
   };
   try {
-    await wings.storage.set("settings", settings);
+    await savedSettings.set(settings as Settings);
   } catch (error) {
-    page.localError = String((error as Error | null)?.message ?? error);
+    page.localError = failure(error);
     return render();
   }
   setup.draft = null;
@@ -265,7 +262,6 @@ export async function save() {
   page.localError = null;
   if (page.main) page.main = { ...page.main, phase: "loading", settings: settings as Settings, error: null };
   render();
-  await wings.broadcast({ type: "settings-changed" });
 }
 
 /** Re-renders after typing stops, so lists for a typed name load without one render per key. */
@@ -312,12 +308,12 @@ export function context(): Ctx {
   const project = String(d.project ?? "").trim();
   const team = String(d.team ?? "").trim();
   const orgOk = validOrg(org);
-  const projects = orgOk ? want(`projects|${org}`, projectsOf(org)) : null;
-  const meta = orgOk && safeArg(project) ? want(`meta|${org}|${project}`, metaOf(org, project)) : null;
+  const projects = orgOk ? want(projectsOf, org) : null;
+  const meta = orgOk && safeArg(project) ? want(metaOf, { org, project }) : null;
   const m = meta?.value;
   const teamOk = !!m && safeArg(team) && m.teams.includes(team);
-  const sprint = teamOk ? want(`sprint|${org}|${project}|${team}`, sprintOf(org, project, team)) : null;
-  const members = teamOk ? want(`members|${org}|${project}|${team}`, teamMembersOf(org, project, team)) : null;
-  const me = want("me", meOf()).value ?? null;
+  const sprint = teamOk ? want(sprintOf, { org, project, team }) : null;
+  const members = teamOk ? want(teamMembersOf, { org, project, team }) : null;
+  const me = want(meOf, "me").value ?? null;
   return { d, org, project, team, orgOk, projects, meta, m, sprint, data: sprint?.value, members, me, typeNames: m?.types.map((t) => t.name).sort() };
 }

@@ -1,34 +1,16 @@
-// The board view's state: the snapshot main.js keeps in storage after each board check, so the list costs no az
-// calls, the filters, and the items opened. An item's details, comments and pull requests are read when it's
-// opened, and kept until the board shows a newer revision of it.
+// The board view's state: the snapshot main serves after each board check, so the list costs no az calls, the
+// filters, and the items opened. An item's details, comments and pull requests are read when it's opened, and kept
+// until the board shows a newer revision of it.
 
-import { az, invoke } from "./lists";
+import { setting } from "wings-plugin-sdk/settings";
+
+import { azJson, failure, pullRequestIds } from "../lib/azure";
+import { invoke } from "../lib/lists";
+import type { Settings } from "../lib/settings";
+import type { Snapshot } from "../lib/types";
 import { page, render } from "./page";
-import type { Settings } from "./settings";
 
-export interface BoardItem {
-  id: number;
-  rev: number;
-  title: string;
-  type: string;
-  state: string;
-  category: string;
-  assignee: string | null;
-  login: string | null;
-  parent: number | null;
-  tags: string[];
-  blocked: boolean;
-  blockedBy: string | null;
-  comments: number;
-  prs: { id: number; status: string }[] | null;
-  checks: string[];
-}
-export interface Snapshot {
-  checkedAt: string;
-  sprint: { name: string; start: string | null; finish: string | null };
-  items: BoardItem[];
-  types: Record<string, { color: string; states: { name: string; category: string; color: string }[] }>;
-}
+export type { BoardItem, Snapshot } from "../lib/types";
 
 /** `az boards work-item show --expand relations`. */
 export interface WorkItemJson {
@@ -84,26 +66,27 @@ export const board = {
 
 export const details = new Map<number, Detail>();
 
+type View = typeof board.view;
+/** The filters, tab and folds, remembered between starts. */
+const savedView = setting<View>("view", {
+  default: board.view,
+  check: (value) => (value && typeof value === "object" && !Array.isArray(value) ? { ...board.view, ...value } : undefined),
+});
+
 export async function loadView() {
-  try {
-    const saved = await wings.storage.get("view");
-    if (saved && typeof saved === "object") board.view = { ...board.view, ...saved };
-  } catch {
-    // The defaults do; storage only remembers filters.
-  }
+  board.view = await savedView.get();
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 export function saveView() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => void wings.storage.set("view", board.view).catch(() => {}), 400);
+  saveTimer = setTimeout(() => void savedView.set(board.view).catch(() => {}), 400);
 }
 
-/** Reads the board main.js stored, and drops cached details whose item changed. */
-export async function loadSnapshot() {
-  const next = (await wings.storage.get("board")) as Snapshot | null;
-  if (!next || next.checkedAt === board.snapshot?.checkedAt) return;
-  board.snapshot = next;
+/** Drops cached details whose item the board now shows at a newer revision, and reads the one on screen again. */
+export function dropStaleDetails() {
+  const next = board.snapshot;
+  if (!next) return;
   const revs = new Map(next.items.map((i) => [i.id, i.rev]));
   for (const [id, d] of details) {
     if (revs.has(id) && revs.get(id) !== d.rev) {
@@ -150,7 +133,7 @@ export async function openItem(id: number, push = true) {
   render();
   try {
     const [item, comments] = await Promise.all([
-      az<WorkItemJson>(["boards", "work-item", "show", "--id", String(id), "--expand", "relations"], s.org ?? null),
+      azJson<WorkItemJson>(["boards", "work-item", "show", "--id", String(id), "--expand", "relations"], s.org ?? null),
       invoke<{ comments?: CommentJson[] }>(s.org ?? null, "comments", [`project=${s.project}`, `workItemId=${id}`], ["order=asc"], "wit", "7.1-preview"),
     ]);
     d.item = item;
@@ -159,22 +142,19 @@ export async function openItem(id: number, push = true) {
     d.loading = false;
     render();
     // Pull requests last: the item is already on screen.
-    const prIds = (item?.relations ?? [])
-      .filter((r) => r.rel === "ArtifactLink" && /^vstfs:\/\/\/Git\/PullRequestId\//i.test(r.url))
-      .map((r) => Number(decodeURIComponent(r.url).split("/").at(-1)))
-      .filter((n) => Number.isInteger(n) && n > 0);
+    const prIds = pullRequestIds(item?.relations ?? []);
     await Promise.all(
       prIds.map(async (pr) => {
         try {
-          d.prs.set(pr, await az<PullRequestJson>(["repos", "pr", "show", "--id", String(pr), "--detect", "false"], s.org ?? null));
+          d.prs.set(pr, await azJson<PullRequestJson>(["repos", "pr", "show", "--id", String(pr), "--detect", "false"], s.org ?? null));
         } catch (error) {
-          d.prs.set(pr, { error: String((error as Error | null)?.message ?? error) });
+          d.prs.set(pr, { error: failure(error) });
         }
         render();
       }),
     );
   } catch (error) {
-    d.error = String((error as Error | null)?.message ?? error);
+    d.error = failure(error);
     d.loading = false;
     render();
   }

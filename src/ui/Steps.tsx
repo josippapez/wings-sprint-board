@@ -4,8 +4,9 @@
 import { Fragment, type ReactNode } from "react";
 import { Badge, Dot, Row, Stack, Text } from "wings-plugin-ui";
 
-import { orgUsersOf, want, type SprintItem } from "../lib/lists";
-import { counted, settle, setup, workingDaysAgo, type Ctx, type Draft } from "../lib/setup";
+import { orgUsersOf, type SprintItem } from "../lib/lists";
+import { want } from "./want";
+import { counted, settle, setup, workingDaysAgo, type Ctx, type Draft } from "./setup";
 import { avatar, dot } from "./bits";
 import { labelled, labelledGroup, listStatus, pickMany, pickOne, TextField } from "./Pickers";
 
@@ -96,7 +97,7 @@ export const STEPS: {
     body: (c) => {
       const hints = new Map<string, number>(counted((c.data?.items ?? []).map((i) => i.assignee ?? "").filter(Boolean)));
       for (const mem of c.members?.value ?? []) if (!hints.has(mem.name)) hints.set(mem.name, 0);
-      const users = want(`users|${c.org}`, orgUsersOf(c.org));
+      const users = want(orgUsersOf, c.org);
       return [
         <Fragment key="members">
           {pickMany("members", [...hints.keys()].sort((a, b) => (hints.get(b) ?? 0) - (hints.get(a) ?? 0) || a.localeCompare(b)), {
