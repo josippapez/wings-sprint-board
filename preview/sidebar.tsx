@@ -46,9 +46,21 @@ const ready: Published = { phase: "ready", settings, missing: [], result, error:
 
 export const queries = { state: () => ready, board: () => snapshot };
 
+// The project search's az query: items in other sprints and in none. The stub is installed after this module loads.
+const found = [
+  { id: 88, fields: { "System.Title": "Sign-in rate limit", "System.WorkItemType": "Story", "System.State": "New", "System.IterationPath": "Web" } },
+  { id: 61, fields: { "System.Title": "Sign-in with a passkey", "System.WorkItemType": "Story", "System.State": "Closed", "System.IterationPath": "Web\\Sprint 9", "System.AssignedTo": { displayName: "Grace Hopper", uniqueName: "grace@example.com" } } },
+  { id: 101, fields: { "System.Title": "Sign-in page", "System.WorkItemType": "Story", "System.State": "Active" } },
+];
+setTimeout(() => {
+  const wings = (window as unknown as { wings: { exec: (program: string, args: string[]) => Promise<unknown> } }).wings;
+  wings.exec = async (_program, args) => ({ code: 0, stdout: args[1] === "query" ? JSON.stringify(found) : "", stderr: "" });
+});
+
 export const states = {
   board: {},
   checks: { storage: { view: { tab: "checks" } } },
+  search: { storage: { view: { tab: "board", q: "sign-in" } } },
   "signed-out": { queries: { state: (): Published => ({ ...ready, phase: "signed-out", result: null, error: "Please run 'az login' to setup account." }), board: () => null } },
   loading: { queries: {} },
 };

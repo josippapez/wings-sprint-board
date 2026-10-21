@@ -30,6 +30,8 @@ export interface BoardItem {
   comments: number;
   prs: { id: number; status: string }[] | null;
   checks: string[];
+  /** The sprint path, set only on items found outside the sprint. */
+  iteration?: string;
 }
 
 /** The board as the last check read it. */

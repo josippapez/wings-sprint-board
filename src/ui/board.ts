@@ -6,8 +6,8 @@ import { setting } from "wings-plugin-sdk/settings";
 
 import { azJson, failure, pullRequestIds } from "../lib/azure";
 import { invoke } from "../lib/lists";
-import type { Settings } from "../lib/settings";
-import type { Snapshot } from "../lib/types";
+import { quote, type Settings } from "../lib/settings";
+import type { BoardItem, Snapshot } from "../lib/types";
 import { page, render } from "./page";
 
 export type { BoardItem, Snapshot } from "../lib/types";
@@ -158,6 +158,73 @@ export async function openItem(id: number, push = true) {
     d.loading = false;
     render();
   }
+}
+
+// ---------- outside the sprint ----------
+
+/** A row of `az boards query`. */
+type RowJson = { id: number; rev?: number; fields?: Record<string, unknown> & { "System.AssignedTo"?: { displayName?: string; uniqueName?: string } } };
+
+/** How many items outside the sprint a search lists. */
+const OUTSIDE_LIMIT = 50;
+
+/** The project's items that match the search but aren't on the board, read once per search text. */
+export const outside = { q: "", items: [] as BoardItem[], loading: false, error: null as string | null };
+let outsideTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Searches the whole project by id or title, a moment after typing stops. Text needs two characters; an id one digit. */
+export function searchOutside(text: string) {
+  const q = text.trim().replace(/^#/, "");
+  if (q === outside.q) return;
+  clearTimeout(outsideTimer);
+  Object.assign(outside, { q, items: [], error: null, loading: false });
+  const id = /^\d+$/.test(q) ? Number(q) : null;
+  if (!id && q.length < 2) return;
+  outside.loading = true;
+  outsideTimer = setTimeout(async () => {
+    const s = settingsOf();
+    const where = [`[System.Title] CONTAINS ${quote(q)}`, ...(id ? [`[System.Id] = ${id}`] : [])].join(" OR ");
+    const wiql =
+      "SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State], [System.AssignedTo], [System.Parent], [System.IterationPath], [System.Rev], [System.CommentCount] " +
+      `FROM WorkItems WHERE [System.TeamProject] = ${quote(s.project ?? "")} AND (${where}) ORDER BY [System.ChangedDate] DESC`;
+    try {
+      const rows = (await azJson<RowJson[]>(["boards", "query", "--wiql", wiql, "--project", s.project ?? ""], s.org ?? null)) ?? [];
+      if (outside.q !== q) return;
+      const onBoard = byId();
+      const category = (type: string, state: string) => stateInfo(type, state)?.category ?? "";
+      outside.items = rows
+        .filter((r) => !onBoard.has(r.id))
+        .slice(0, OUTSIDE_LIMIT)
+        .map((r): BoardItem => {
+          const f = r.fields ?? {};
+          const type = String(f["System.WorkItemType"] ?? "");
+          const state = String(f["System.State"] ?? "");
+          return {
+            id: r.id,
+            rev: typeof f["System.Rev"] === "number" ? f["System.Rev"] : (r.rev ?? 0),
+            title: String(f["System.Title"] ?? ""),
+            type,
+            state,
+            category: category(type, state),
+            assignee: f["System.AssignedTo"]?.displayName ?? null,
+            login: f["System.AssignedTo"]?.uniqueName ?? null,
+            parent: typeof f["System.Parent"] === "number" ? f["System.Parent"] : null,
+            tags: [],
+            blocked: false,
+            blockedBy: null,
+            comments: typeof f["System.CommentCount"] === "number" ? f["System.CommentCount"] : 0,
+            prs: null,
+            checks: [],
+            iteration: String(f["System.IterationPath"] ?? ""),
+          };
+        });
+    } catch (error) {
+      if (outside.q !== q) return;
+      outside.error = failure(error);
+    }
+    outside.loading = false;
+    render();
+  }, 400);
 }
 
 export function back() {

@@ -2,10 +2,10 @@
 
 import { Badge, Empty, ListButton, Row, SearchField, Select, Stack, Text } from "wings-plugin-ui";
 
-import { board, isOpen, openItem, saveView, stateInfo, toggle, typeColor, type BoardItem } from "./board";
+import { board, isOpen, openItem, outside, saveView, searchOutside, stateInfo, toggle, typeColor, type BoardItem } from "./board";
 import { meOf } from "../lib/lists";
 import { render } from "./page";
-import { avatar, CARET, dot, icon, spinner } from "./bits";
+import { avatar, CARET, dot, errorLine, icon, spinner } from "./bits";
 import { need } from "./want";
 
 const CATEGORY_ORDER = ["Proposed", "InProgress", "Resolved", "Completed", "Removed"];
@@ -22,7 +22,7 @@ function prChip(i: BoardItem) {
 
 // ---------- the list ----------
 
-function itemRow(i: BoardItem, o: { child?: boolean; kids?: BoardItem[] } = {}) {
+function itemRow(i: BoardItem, o: { child?: boolean; state?: boolean; kids?: BoardItem[] } = {}) {
   const kids = o.kids ?? [];
   const open = kids.length > 0 && isOpen(`p:${i.id}`, false);
   const done = kids.filter((k) => k.category === "Completed").length;
@@ -31,11 +31,11 @@ function itemRow(i: BoardItem, o: { child?: boolean; kids?: BoardItem[] } = {}) 
       {kids.length
         ? <button className={`twisty${open ? " open" : ""}`} type="button" aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${kids.length} children`} title={`${done}/${kids.length} done`} onClick={() => toggle(`p:${i.id}`)}>{icon(CARET)}</button>
         : <span className="twisty-space" />}
-      <ListButton className="item-main" title={`${i.type} ${i.id}: ${i.title}`} onClick={() => void openItem(i.id)}>
+      <ListButton className="item-main" title={`${i.type} ${i.id}: ${i.title}${i.iteration ? `\n${i.iteration}` : ""}`} onClick={() => void openItem(i.id)}>
         {dot(typeColor(i.type), i.type)}
         <Text mono size="tiny" tone="muted" numeric>{String(i.id)}</Text>
         <Text truncate grow>{i.title}</Text>
-        {o.child ? <Badge variant="outline" className="state" title={i.state}>{i.state}</Badge> : null}
+        {o.child || o.state ? <Badge variant="outline" className="state" title={i.state}>{i.state}</Badge> : null}
         {kids.length ? <Badge variant="outline" title={`${done} of ${kids.length} children done`}>{`${done}/${kids.length}`}</Badge> : null}
         {i.blocked ? <Badge tone="danger" title={`Blocked by ${i.blockedBy ?? ""}`}>Blocked</Badge> : null}
         {prChip(i)}
@@ -137,9 +137,24 @@ export function renderList() {
   // Filtering lists matching items on their own; otherwise children sit under their story, as on the backlog.
   const top = filtered ? items.filter(match) : items.filter((i) => !(i.parent && ids.has(i.parent)));
   const groups = groupByState(top);
-  if (!groups.length) return [filterBar(), <Empty key="empty" title={filtered ? "Nothing matches." : "The sprint has no items."} />];
+  searchOutside(view.q);
+  const others = outside.items.filter(match);
+  const outsideOpen = isOpen("outside", true);
+  const outsideSection = q ? (
+    <Stack key="outside" as="section" gap="none" aria-busy={outside.loading}>
+      <ListButton className={`group-head${outsideOpen ? " open" : ""}`} aria-expanded={outsideOpen} onClick={() => toggle("outside")}>
+        {icon(CARET)}
+        <Text size="small" weight="medium" truncate className="fg">Outside this sprint</Text>
+        {outside.loading ? spinner() : <Text size="small" tone="muted" numeric>{String(others.length)}</Text>}
+      </ListButton>
+      {outside.error ? errorLine(`Couldn't search the project: ${outside.error}`) : null}
+      {outsideOpen ? <Stack gap="none">{others.map((i) => itemRow(i, { state: true }))}</Stack> : null}
+    </Stack>
+  ) : null;
+  if (!groups.length && !q) return [filterBar(), <Empty key="empty" title={filtered ? "Nothing matches." : "The sprint has no items."} />];
   return [
     filterBar(),
+    ...(groups.length ? [] : [<Text key="none" as="p" tone="muted" size="small">Nothing in this sprint matches.</Text>]),
     ...groups.map(([state, g]) => {
       const key = `s:${state}`;
       const open = isOpen(key, g.category !== "Completed" && g.category !== "Removed");
@@ -155,5 +170,6 @@ export function renderList() {
         </Stack>
       );
     }),
+    outsideSection,
   ];
 }
