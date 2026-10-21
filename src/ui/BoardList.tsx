@@ -2,11 +2,11 @@
 
 import { Badge, Empty, ListButton, Row, SearchField, Select, Stack, Text } from "wings-plugin-ui";
 
-import { board, isOpen, openItem, outside, saveView, searchOutside, stateInfo, toggle, typeColor, type BoardItem } from "./board";
-import { meOf } from "../lib/lists";
+import { board, isOpen, NO_SPRINT, openItem, outside, saveView, searchOutside, settingsOf, stateInfo, toggle, typeColor, type BoardItem } from "./board";
+import { meOf, teamSprintsOf } from "../lib/lists";
 import { render } from "./page";
 import { avatar, CARET, dot, errorLine, icon, spinner } from "./bits";
-import { need } from "./want";
+import { need, want } from "./want";
 
 const CATEGORY_ORDER = ["Proposed", "InProgress", "Resolved", "Completed", "Removed"];
 
@@ -69,9 +69,35 @@ function groupByState(items: BoardItem[]) {
   return [...groups.entries()].sort((a, b) => a[1].rank - b[1].rank);
 }
 
-/** The people and types on the board, which the filters offer. */
+/**
+ * The sprint picked, empty for the board's own, and the sprints to pick from: the team's coming ones, its past ones
+ * latest first, and no sprint. A saved sprint the team no longer has shows the board's.
+ */
+function sprints() {
+  const s = settingsOf();
+  const loaded = s.org && s.project && s.team ? want(teamSprintsOf, { org: s.org, project: s.project, team: s.team }) : { loading: false };
+  const list = loaded.value ?? [];
+  const options = [
+    { value: "", label: "This sprint" },
+    ...list.filter((t) => t.timeFrame === "future").map((t) => ({ value: t.path, label: t.name })),
+    ...list.filter((t) => t.timeFrame === "past").reverse().map((t) => ({ value: t.path, label: `${t.name} (past)` })),
+    { value: NO_SPRINT, label: "No sprint" },
+  ];
+  const saved = board.view.sprint;
+  let sprint = saved;
+  if (saved && !options.some((o) => o.value === saved)) {
+    if (loaded.value) sprint = "";
+    else options.splice(1, 0, { value: saved, label: saved.split("\\").at(-1) ?? saved });
+  }
+  return { sprint, options };
+}
+
+/** The items the list shows: the board's, or the picked sprint's. */
+const listItems = () => (sprints().sprint ? outside.items : (board.snapshot?.items ?? []));
+
+/** The people and types in the list, which the filters offer. */
 function options() {
-  const items = board.snapshot?.items ?? [];
+  const items = listItems();
   const people = [...new Set(items.map((i) => i.assignee).filter((a) => !!a))].map(String).sort();
   const types = [...new Set(items.map((i) => i.type))].sort();
   return { people, types };
@@ -110,6 +136,7 @@ function filterBar() {
         />
         <Select id="board-type" label="Type" value={type} onChange={(v) => set({ type: v })} options={[{ value: "", label: "All types" }, ...types.map((t) => ({ value: t, label: t }))]} />
       </Row>
+      <Select id="board-sprint" label="Sprint" value={sprints().sprint} onChange={(v) => set({ sprint: v })} options={sprints().options} />
     </Stack>
   );
 }
@@ -130,17 +157,18 @@ export function renderList() {
     (!type || i.type === type) &&
     (!q || String(i.id).includes(q) || i.title.toLowerCase().includes(q));
   const filtered = who !== "all" || !!type || !!q;
-  const items = snapshot.items;
+  const { sprint } = sprints();
+  searchOutside(view.q, sprint);
+  const items = listItems();
   const ids = new Set(items.map((i) => i.id));
   const kids = new Map<number, BoardItem[]>();
   for (const i of items) if (i.parent && ids.has(i.parent)) kids.set(i.parent, [...(kids.get(i.parent) ?? []), i]);
   // Filtering lists matching items on their own; otherwise children sit under their story, as on the backlog.
   const top = filtered ? items.filter(match) : items.filter((i) => !(i.parent && ids.has(i.parent)));
   const groups = groupByState(top);
-  searchOutside(view.q);
   const others = outside.items.filter(match);
   const outsideOpen = isOpen("outside", true);
-  const outsideSection = q ? (
+  const outsideSection = q && !sprint ? (
     <Stack key="outside" as="section" gap="none" aria-busy={outside.loading}>
       <ListButton className={`group-head${outsideOpen ? " open" : ""}`} aria-expanded={outsideOpen} onClick={() => toggle("outside")}>
         {icon(CARET)}
@@ -151,7 +179,10 @@ export function renderList() {
       {outsideOpen ? <Stack gap="none">{others.map((i) => itemRow(i, { state: true }))}</Stack> : null}
     </Stack>
   ) : null;
-  if (!groups.length && !q) return [filterBar(), <Empty key="empty" title={filtered ? "Nothing matches." : "The sprint has no items."} />];
+  if (sprint && (outside.loading || outside.error)) {
+    return [filterBar(), outside.error ? errorLine(`Couldn't read the sprint: ${outside.error}`) : <Row key="loading">{spinner()}<Text tone="muted">Reading the sprint…</Text></Row>];
+  }
+  if (!groups.length && (!q || sprint)) return [filterBar(), <Empty key="empty" title={filtered ? "Nothing matches." : sprint === NO_SPRINT ? "Nothing is outside a sprint." : "The sprint has no items."} />];
   return [
     filterBar(),
     ...(groups.length ? [] : [<Text key="none" as="p" tone="muted" size="small">Nothing in this sprint matches.</Text>]),
@@ -171,5 +202,6 @@ export function renderList() {
       );
     }),
     outsideSection,
+    outside.more ? <Text key="more" as="p" tone="muted" size="small">{`Showing the ${outside.items.length} changed last. Search to narrow it down.`}</Text> : null,
   ];
 }

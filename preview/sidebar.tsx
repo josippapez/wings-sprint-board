@@ -54,13 +54,15 @@ const found = [
 ];
 setTimeout(() => {
   const wings = (window as unknown as { wings: { exec: (program: string, args: string[]) => Promise<unknown> } }).wings;
-  wings.exec = async (_program, args) => ({ code: 0, stdout: args[1] === "query" ? JSON.stringify(found) : "", stderr: "" });
+  const sprints = ["Sprint 10", "Sprint 11", "Sprint 12", "Sprint 13"].map((name, n) => ({ name, path: `Web\\${name}`, attributes: { timeFrame: ["past", "past", "current", "future"][n] } }));
+  wings.exec = async (_program, args) => ({ code: 0, stdout: args[1] === "query" ? JSON.stringify(found) : args[1] === "iteration" ? JSON.stringify(sprints) : "", stderr: "" });
 });
 
 export const states = {
   board: {},
   checks: { storage: { view: { tab: "checks" } } },
   search: { storage: { view: { tab: "board", q: "sign-in" } } },
+  "other-sprint": { storage: { view: { tab: "board", sprint: "Web\\Sprint 11" } } },
   "signed-out": { queries: { state: (): Published => ({ ...ready, phase: "signed-out", result: null, error: "Please run 'az login' to setup account." }), board: () => null } },
   loading: { queries: {} },
 };

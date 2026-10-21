@@ -160,6 +160,19 @@ export const sprintOf = cached(async ({ org, project, team }: Team) => {
   return data;
 }, byJson);
 
+export interface TeamSprint {
+  name: string;
+  path: string;
+  /** past, current or future. */
+  timeFrame: string;
+}
+
+/** The team's sprints, past, current and future, in date order. One call. */
+export const teamSprintsOf = cached(async ({ org, project, team }: Team): Promise<TeamSprint[]> => {
+  const out = await az<(IterationJson & { attributes?: { timeFrame?: string } })[]>(["boards", "iteration", "team", "list", "--team", team, "--project", project], org);
+  return (out ?? []).map((it) => ({ name: String(it.name), path: String(it.path), timeFrame: String(it.attributes?.timeFrame ?? "") }));
+}, byJson);
+
 export const teamMembersOf = cached(async ({ org, project, team }: Team): Promise<Person[]> => {
   const out = await az<{ identity?: { isContainer?: boolean; displayName?: string; uniqueName?: string } }[]>(["devops", "team", "list-member", "--team", team, "--project", project, "--top", "500"], org);
   return (out ?? [])

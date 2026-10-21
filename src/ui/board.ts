@@ -56,7 +56,7 @@ export interface Detail {
 export const board = {
   snapshot: null as Snapshot | null,
   /** Filters, tab and which groups are flipped from their default, kept in storage. */
-  view: { tab: "board", who: "all", type: "", q: "", toggled: [] as string[] },
+  view: { tab: "board", who: "all", type: "", q: "", sprint: "", toggled: [] as string[] },
   /** Items opened, the last one on screen. */
   opened: [] as number[],
   listScroll: 0,
@@ -160,41 +160,57 @@ export async function openItem(id: number, push = true) {
   }
 }
 
-// ---------- outside the sprint ----------
+// ---------- outside the sprint, and other sprints ----------
 
 /** A row of `az boards query`. */
 type RowJson = { id: number; rev?: number; fields?: Record<string, unknown> & { "System.AssignedTo"?: { displayName?: string; uniqueName?: string } } };
 
-/** How many items outside the sprint a search lists. */
+/** How many items a search of the whole project, or of no sprint, lists. A picked sprint lists all of its items. */
 const OUTSIDE_LIMIT = 50;
 
-/** The project's items that match the search but aren't on the board, read once per search text. */
-export const outside = { q: "", items: [] as BoardItem[], loading: false, error: null as string | null };
+/** No sprint: items on the project's root iteration, the backlog. */
+export const NO_SPRINT = "none";
+
+/**
+ * Items read for the list beyond the board: with `sprint` empty, the project's items that match the search but aren't
+ * on the board; otherwise the picked sprint's items (or no sprint's), matching the search if there is one.
+ */
+export const outside = { key: "", items: [] as BoardItem[], more: false, loading: false, error: null as string | null };
 let outsideTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** Searches the whole project by id or title, a moment after typing stops. Text needs two characters; an id one digit. */
-export function searchOutside(text: string) {
-  const q = text.trim().replace(/^#/, "");
-  if (q === outside.q) return;
+/** Reads `outside` a moment after typing stops. Searching the whole project needs two characters, or an id. */
+export function searchOutside(text: string, sprint: string) {
+  // A picked sprint is read whole and the list filters it; no sprint can be too long for that.
+  const q = sprint && sprint !== NO_SPRINT ? "" : text.trim().replace(/^#/, "");
+  const key = `${sprint}|${q}`;
+  if (key === outside.key) return;
   clearTimeout(outsideTimer);
-  Object.assign(outside, { q, items: [], error: null, loading: false });
+  Object.assign(outside, { key, items: [], more: false, error: null, loading: false });
   const id = /^\d+$/.test(q) ? Number(q) : null;
-  if (!id && q.length < 2) return;
+  if (!sprint && !id && q.length < 2) return;
   outside.loading = true;
   outsideTimer = setTimeout(async () => {
     const s = settingsOf();
-    const where = [`[System.Title] CONTAINS ${quote(q)}`, ...(id ? [`[System.Id] = ${id}`] : [])].join(" OR ");
+    const project = s.project ?? "";
+    const text = q ? [`[System.Title] CONTAINS ${quote(q)}`, ...(id ? [`[System.Id] = ${id}`] : [])].join(" OR ") : "";
+    const where = [
+      `[System.TeamProject] = ${quote(project)}`,
+      ...(sprint ? [`[System.IterationPath] = ${quote(sprint === NO_SPRINT ? project : sprint)}`, "[System.State] <> 'Removed'"] : []),
+      ...(text ? [`(${text})`] : []),
+    ].join(" AND ");
     const wiql =
       "SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State], [System.AssignedTo], [System.Parent], [System.IterationPath], [System.Rev], [System.CommentCount] " +
-      `FROM WorkItems WHERE [System.TeamProject] = ${quote(s.project ?? "")} AND (${where}) ORDER BY [System.ChangedDate] DESC`;
+      `FROM WorkItems WHERE ${where} ORDER BY [System.ChangedDate] DESC`;
     try {
-      const rows = (await azJson<RowJson[]>(["boards", "query", "--wiql", wiql, "--project", s.project ?? ""], s.org ?? null)) ?? [];
-      if (outside.q !== q) return;
+      const rows = (await azJson<RowJson[]>(["boards", "query", "--wiql", wiql, "--project", project], s.org ?? null)) ?? [];
+      if (outside.key !== key) return;
       const onBoard = byId();
       const category = (type: string, state: string) => stateInfo(type, state)?.category ?? "";
-      outside.items = rows
-        .filter((r) => !onBoard.has(r.id))
-        .slice(0, OUTSIDE_LIMIT)
+      const found = sprint ? rows : rows.filter((r) => !onBoard.has(r.id));
+      const limit = sprint && sprint !== NO_SPRINT ? found.length : OUTSIDE_LIMIT;
+      outside.more = found.length > limit;
+      outside.items = found
+        .slice(0, limit)
         .map((r): BoardItem => {
           const f = r.fields ?? {};
           const type = String(f["System.WorkItemType"] ?? "");
@@ -219,7 +235,7 @@ export function searchOutside(text: string) {
           };
         });
     } catch (error) {
-      if (outside.q !== q) return;
+      if (outside.key !== key) return;
       outside.error = failure(error);
     }
     outside.loading = false;
