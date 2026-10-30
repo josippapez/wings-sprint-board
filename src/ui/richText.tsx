@@ -16,6 +16,15 @@ function hasMark(node: ReactNode): boolean {
 }
 
 /**
+ * An image as a link to open it in the browser. Attachments need the user's sign-in, which the page doesn't have, and
+ * `wings.fetch` and `exec` carry text only, so the bytes can't be fetched and shown here.
+ */
+function imageNode(src: string, key: number) {
+  if (!/^https:\/\/dev\.azure\.com\//.test(src)) return <span key={key} className="muted">[image]</span>;
+  return <button key={key} className="inline-link" type="button" title="Open the image in the browser" onClick={() => void wings.openUrl(src)}>[image]</button>;
+}
+
+/**
  * Azure DevOps rich text as safe page nodes. The HTML is parsed into an inert document, which runs no scripts and
  * loads nothing, and only its text and a few structural tags are copied out: never the parsed nodes themselves.
  */
@@ -34,7 +43,7 @@ export function richText(html: string) {
       const tag = el.tagName.toLowerCase();
       if (["script", "style", "template", "iframe", "object", "noscript"].includes(tag)) continue;
       if (tag === "br") to.push(<br key={key++} />);
-      else if (tag === "img") to.push(<span key={key++} className="muted">[image]</span>);
+      else if (tag === "img") to.push(imageNode(el.getAttribute("src") ?? "", key++));
       else if (tag === "a") {
         const href = el.getAttribute("href") ?? "";
         const text = (el.textContent ?? "").trim() || href;
@@ -63,9 +72,9 @@ const linkNode = (text: string, href: string, key: number) =>
     ? <button key={key} className="inline-link" type="button" title={href} onClick={() => void wings.openUrl(href)}>{text}</button>
     : <span key={key}>{text}{/^https?:/.test(href) && href !== text ? <span className="muted">{` (${href})`}</span> : ""}</span>;
 
-const mdInline = /!\[([^\]]*)\]\([^)\s]*\)|\[([^\]]+)\]\(([^)\s]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*\s][^*]*)\*/g;
+const mdInline = /!\[[^\]]*\]\(([^)\s]*)\)|\[([^\]]+)\]\(([^)\s]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*\s][^*]*)\*/g;
 
-/** Inline code, bold, italics and links as nodes. An image shows as [image], like in rich text. */
+/** Inline code, bold, italics and links as nodes. An image is a link to it, like in rich text. */
 function markdownInline(src: string): ReactNode[] {
   const out: ReactNode[] = [];
   let at = 0;
@@ -73,7 +82,7 @@ function markdownInline(src: string): ReactNode[] {
     if (m.index > at) out.push(src.slice(at, m.index));
     at = m.index + m[0].length;
     const key = out.length;
-    if (m[0].startsWith("!")) out.push(<span key={key} className="muted">[image]</span>);
+    if (m[0].startsWith("!")) out.push(imageNode(m[1], key));
     else if (m[2] !== undefined) out.push(linkNode(m[2], m[3], key));
     else if (m[4] !== undefined) out.push(<code key={key}>{m[4]}</code>);
     else if (m[5] !== undefined) out.push(<strong key={key}>{markdownInline(m[5])}</strong>);
@@ -83,8 +92,19 @@ function markdownInline(src: string): ReactNode[] {
   return out;
 }
 
+/** The cells of a table row: split on `|` that isn't escaped as `\|`, outer pipes dropped. */
+const tableCells = (line: string) =>
+  line.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.replace(/\\\|/g, "|").trim());
+
+/** A table's delimiter row (`| --- | :-: |`) as its cells, or null when the line isn't one. */
+function delimiterCells(line: string | undefined) {
+  if (!line?.includes("-") || !line.includes("|")) return null;
+  const cells = tableCells(line);
+  return cells.every((c) => /^:?-+:?$/.test(c)) ? cells : null;
+}
+
 /**
- * Azure DevOps markdown fields as page nodes: headings, paragraphs, lists, fenced code, quotes and rules, built as
+ * Azure DevOps markdown fields as page nodes: headings, paragraphs, lists, tables, fenced code, quotes and rules, built as
  * new elements from the text. Raw HTML in it shows as text, never as markup.
  */
 export function markdownText(src: string) {
@@ -111,7 +131,23 @@ export function markdownText(src: string) {
       while (++i < lines.length && !/^\s*(```|~~~)/.test(lines[i])) code.push(lines[i]);
       out.push(<pre key={out.length}><code>{code.join("\n")}</code></pre>);
     } else if (!line.trim()) flush();
-    else if (/^#{1,6}\s/.test(line)) {
+    else if (line.includes("|") && delimiterCells(lines[i + 1])?.length === tableCells(line).length) {
+      flush();
+      const head = tableCells(line);
+      const align = delimiterCells(lines[i + 1])!.map((c) => (c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : undefined));
+      const rows: string[][] = [];
+      for (i += 2; i < lines.length && lines[i].trim() && lines[i].includes("|"); i++) rows.push(tableCells(lines[i]));
+      i--;
+      // Short rows are padded and long ones cut, as GFM does.
+      out.push(
+        <div key={out.length} className="w-md-table-wrap">
+          <table className="w-md-table">
+            <thead><tr>{head.map((c, n) => <th key={n} scope="col" data-align={align[n]}>{markdownInline(c)}</th>)}</tr></thead>
+            <tbody>{rows.map((row, r) => <tr key={r}>{head.map((_, n) => <td key={n} data-align={align[n]}>{markdownInline(row[n] ?? "")}</td>)}</tr>)}</tbody>
+          </table>
+        </div>,
+      );
+    } else if (/^#{1,6}\s/.test(line)) {
       flush();
       out.push(<p key={out.length} className="heading">{markdownInline(line.replace(/^#{1,6}\s+/, "").replace(/\s+#+\s*$/, ""))}</p>);
     } else if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
