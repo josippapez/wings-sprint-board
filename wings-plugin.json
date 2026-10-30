@@ -26,6 +26,9 @@
     "fetch": [
       "GET https://dev.azure.com/"
     ],
+    "secrets": {
+      "azure-devops": "https://dev.azure.com/"
+    },
     "openUrl": [
       "https://dev.azure.com/"
     ]
