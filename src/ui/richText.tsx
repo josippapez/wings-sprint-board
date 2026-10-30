@@ -1,4 +1,6 @@
-import { createElement, isValidElement, type ReactElement, type ReactNode } from "react";
+import { createElement, isValidElement, useEffect, useState, type ReactElement, type ReactNode } from "react";
+
+import { loadImage } from "./images";
 
 /** The text a node shows, like an element's textContent. */
 export function textOf(node: ReactNode): string {
@@ -15,13 +17,25 @@ function hasMark(node: ReactNode): boolean {
   return node.type === "br" || String(node.props.className ?? "").split(" ").includes("muted") || hasMark(node.props.children);
 }
 
-/**
- * An image as a link to open it in the browser. Attachments need the user's sign-in, which the page doesn't have, and
- * `wings.fetch` and `exec` carry text only, so the bytes can't be fetched and shown here.
- */
+/** An Azure DevOps image, shown once Wings has fetched it. Until then, or when it can't be, it is a link to open it in the browser. */
+function AzureImage({ src }: { src: string }) {
+  const [shown, setShown] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setShown(null);
+    void loadImage(src).then((data) => live && setShown(data));
+    return () => {
+      live = false;
+    };
+  }, [src]);
+  if (shown) return <img className="rich-image" src={shown} alt="Attached image" />;
+  return <button className="inline-link" type="button" title="Open the image in the browser" onClick={() => void wings.openUrl(src)}>[image]</button>;
+}
+
+/** An image: an Azure DevOps one is fetched and shown, any other stays a note. */
 function imageNode(src: string, key: number) {
   if (!/^https:\/\/dev\.azure\.com\//.test(src)) return <span key={key} className="muted">[image]</span>;
-  return <button key={key} className="inline-link" type="button" title="Open the image in the browser" onClick={() => void wings.openUrl(src)}>[image]</button>;
+  return <AzureImage key={key} src={src} />;
 }
 
 /**

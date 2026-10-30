@@ -10,7 +10,7 @@ Every item of the current sprint in your team's areas, grouped by state in workf
 
 Search by id or title, and filter by person (Everyone, Mine, Unassigned or anyone in the sprint) and type. Mine is whoever `az` is signed in as. The filters and what's folded are remembered.
 
-Click a row for the item: its state, assignee, iteration, area, tags, parent, children, what blocks it, its pull requests, the description and acceptance criteria, and the discussion, oldest comment first. Item links open in the sidebar; **Open in Azure DevOps** opens the browser. Text from Azure DevOps is shown as text: formatting is rebuilt from paragraphs, lists and emphasis only, images show as [image] that opens the picture in the browser (the board can't load it, it needs your sign-in), and only Azure DevOps links open.
+Click a row for the item: its state, assignee, iteration, area, tags, parent, children, what blocks it, its pull requests, the description and acceptance criteria, and the discussion, oldest comment first. Item links open in the sidebar; **Open in Azure DevOps** opens the browser. Text from Azure DevOps is shown as text: formatting is rebuilt from paragraphs, lists and emphasis only, images from Azure DevOps load in the text (the board fetches them with your `az` sign-in, and shows an [image] link that opens the picture in the browser while one loads or when it can't), and only Azure DevOps links open.
 
 The list comes from the last board check, so it costs nothing to open. An item reads its details and comments when you open it (two calls) and each pull request after that, and keeps them until the board shows a newer revision of it.
 
