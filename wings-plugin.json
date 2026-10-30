@@ -1,27 +1,27 @@
 {
   "id": "sprint-board",
   "name": "Sprint board",
-  "version": "0.8.0",
+  "version": "0.8.2",
   "minWingsVersion": "0.1.108",
   "description": "Your team's current Azure DevOps sprint in a sidebar: items by state with their tasks, details and comments, and board checks with a proposed fix for each. Read-only.",
   "api": 1,
   "main": "dist/main.js",
   "permissions": {
     "exec": [
-      "git remote get-url",
-      "az boards iteration team list",
-      "az boards area team list",
-      "az boards query",
-      "az boards work-item show",
-      "az devops invoke",
-      "az devops project list",
-      "az devops team list",
-      "az repos pr show",
-      "az account show",
-      "az account get-access-token",
-      "az devops team list-member",
-      "az devops user list",
-      "az login"
+      "git remote get-url []",
+      "az boards iteration team list [--team --timeframe --project --organization -o]",
+      "az boards area team list [--team --project --organization -o]",
+      "az boards query [--wiql --project --organization -o]",
+      "az boards work-item show [--id --expand --organization -o]",
+      "az devops invoke [--area --resource --route-parameters --query-parameters --api-version --organization -o]",
+      "az devops project list [--top --organization -o]",
+      "az devops team list [--project --top --organization -o]",
+      "az repos pr show [--id --detect --organization -o]",
+      "az account show [--query -o]",
+      "az account get-access-token [--resource -o]",
+      "az devops team list-member [--team --project --top --organization -o]",
+      "az devops user list [--top --organization -o]",
+      "az login [--allow-no-subscriptions --output]"
     ],
     "fetch": [
       "GET https://dev.azure.com/"
