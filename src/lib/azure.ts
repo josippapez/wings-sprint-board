@@ -1,5 +1,7 @@
-import { cached, errorMessage } from "wings-plugin-sdk/async";
+import { cached, errorMessage, mapLimit } from "wings-plugin-sdk/async";
+import { workItems } from "wings-plugin-sdk/azure";
 import { cli } from "wings-plugin-sdk/cli";
+import { azureApiOrg } from "wings-plugin-sdk/git";
 
 import { org, type Settings } from "./settings";
 
@@ -105,18 +107,73 @@ function toItem(row: QueryRow, s: Settings): Item {
   };
 }
 
-/** The item's links, one `az boards work-item show` each: az has no batch read that keeps relations. */
-export async function relations(id: number, s: Settings) {
-  const item = await az<{ relations?: Relation[] }>(["boards", "work-item", "show", "--id", String(id), "--expand", "relations"], s);
-  return item?.relations ?? [];
+const loaders = new Map<string, ReturnType<typeof workItems>>();
+
+/** The item's links. Items asked in the same turn go out as one `az rest` call, 200 at most. */
+export async function relations(id: number, s: Settings): Promise<Relation[]> {
+  const organization = org(s);
+  let loader = loaders.get(organization);
+  if (!loader) {
+    const counted = { ...azCli, json: (args: string[], call?: Parameters<typeof azCli.json>[1]) => (counter.calls++, azCli.json(args, call)) } as typeof azCli;
+    loader = workItems(counted, organization);
+    loaders.set(organization, loader);
+  }
+  const item = await loader.get(id);
+  return (item?.relations ?? []).map((r) => ({ rel: r.rel ?? "", url: r.url ?? "" }));
 }
 
-/** Pull request ids from ArtifactLinks like vstfs:///Git/PullRequestId/{projectId}%2F{repositoryId}%2F{prId}. */
-export function pullRequestIds(rels: Relation[]) {
+/** A pull request a work item links to, with the project it is in. */
+export interface PullRequestRef {
+  id: number;
+  project: string;
+}
+
+/** Pull requests from ArtifactLinks like vstfs:///Git/PullRequestId/{projectId}%2F{repositoryId}%2F{prId}. */
+export function pullRequestRefs(rels: Relation[]): PullRequestRef[] {
   return rels
     .filter((r) => r.rel === "ArtifactLink" && /^vstfs:\/\/\/Git\/PullRequestId\//i.test(r.url))
-    .map((r) => Number(decodeURIComponent(r.url).split("/").at(-1)))
-    .filter((n) => Number.isInteger(n) && n > 0);
+    .map((r) => decodeURIComponent(r.url).split("/"))
+    .map((parts) => ({ id: Number(parts.at(-1)), project: parts.at(-3) ?? "" }))
+    .filter((p) => Number.isInteger(p.id) && p.id > 0);
+}
+
+export const pullRequestIds = (rels: Relation[]) => pullRequestRefs(rels).map((p) => p.id);
+
+/** Pull requests per call of the project's list: 500 keep an answer near 3 MB, and `exec` gives up past 8 MB. */
+const PR_PAGE = 500;
+/** Pages read before the rest are asked for one by one. */
+const PR_PAGES = 4;
+const DEVOPS_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798";
+
+type PullRequestRow = { pullRequestId: number; status?: unknown; title?: unknown };
+
+const pullRequestRest = (url: string, key: string) => {
+  counter.calls++;
+  return azCli.json<PullRequestRow | { value: PullRequestRow[] }>(["rest", "--resource", DEVOPS_RESOURCE, "--url", url, "-o", "json"], { timeoutMs: 60_000, key });
+};
+
+/**
+ * The status and title of pull requests. The newest first of a project's list answer for many at once, a few calls in
+ * all; one older than that is asked for by id.
+ */
+export async function pullRequests(refs: PullRequestRef[], s: Settings) {
+  const base = azureApiOrg(org(s));
+  const found = new Map<number, { status: string; title: string }>();
+  const take = (row: PullRequestRow) => found.set(row.pullRequestId, { status: String(row.status ?? ""), title: String(row.title ?? "") });
+  for (const project of new Set(refs.map((r) => r.project))) {
+    const wanted = new Set(refs.filter((r) => r.project === project).map((r) => r.id));
+    const oldest = Math.min(...wanted);
+    for (let page = 0; page < PR_PAGES && wanted.size; page++) {
+      const url = `${base}/${project}/_apis/git/pullrequests?searchCriteria.status=all&$top=${PR_PAGE}&$skip=${page * PR_PAGE}&api-version=7.1`;
+      const { value } = (await pullRequestRest(url, org(s))) as { value: PullRequestRow[] };
+      for (const row of value) if (wanted.delete(row.pullRequestId)) take(row);
+      // Newest first: a page that reaches the oldest one we want, or the end of the list, has all there is.
+      if (value.length < PR_PAGE || value.some((row) => row.pullRequestId <= oldest)) break;
+    }
+  }
+  const rest = [...new Set(refs.map((r) => r.id))].filter((id) => !found.has(id));
+  for (const [id, row] of await mapLimit(rest, PARALLEL, async (id) => [id, (await pullRequestRest(`${base}/_apis/git/pullrequests/${id}?api-version=7.1`, org(s))) as PullRequestRow] as const)) take({ ...row, pullRequestId: id });
+  return found;
 }
 
 /** Work item ids a relation of this kind points to. */

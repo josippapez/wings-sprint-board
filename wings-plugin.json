@@ -1,7 +1,7 @@
 {
   "id": "sprint-board",
   "name": "Sprint board",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "minWingsVersion": "0.1.108",
   "description": "Your team's current Azure DevOps sprint in a sidebar: items by state with their tasks, details and comments, and board checks with a proposed fix for each. Read-only.",
   "api": 1,
@@ -17,6 +17,7 @@
       "az devops project list [--top --organization -o]",
       "az devops team list [--project --top --organization -o]",
       "az repos pr show [--id --detect --organization -o]",
+      "az rest [--resource --url -o]",
       "az account show [--query -o]",
       "az account get-access-token [--resource -o]",
       "az devops team list-member [--team --project --top --organization -o]",
