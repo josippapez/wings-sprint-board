@@ -138,6 +138,16 @@ button.twisty:hover {
   border-left: 2px solid var(--wings-hairline-strong);
   color: var(--wings-muted);
 }
+/* The text above breaks anywhere, which also shrinks a column to one letter. A table keeps its words whole and scrolls sideways instead. */
+.rich .w-md-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wings-hairline-strong) transparent;
+}
+.rich .w-md-table th,
+.rich .w-md-table td {
+  overflow-wrap: normal;
+  word-break: normal;
+}
 .rich.clamp {
   max-height: 180px;
   overflow: hidden;

@@ -19,6 +19,7 @@ An **index** per operation, see [the item](https://dev.azure.com/example/Web/_wo
 | ---------- | :-----: | -------: | ------ |
 | \`list\` | read | Show every \`row\` | #123 |
 | \`save\` | write | Keep one \\| row | #124 |
+| \`synchronize\` | read | Reads every remote record and merges the differences into the local copy | #125, #126 |
 
 - after the table
 ![Screenshot](https://dev.azure.com/example/00000000-0000-0000-0000-000000000000/_apis/wit/attachments/00000000-0000-0000-0000-000000000001?fileName=image.png)`;
