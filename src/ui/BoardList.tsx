@@ -172,7 +172,8 @@ export function renderList() {
   const outsideSection = q && !sprint ? (
     <Stack key="outside" as="section" gap="none" aria-busy={outside.loading}>
       <ListButton className={`group-head${outsideOpen ? " open" : ""}`} aria-expanded={outsideOpen} onClick={() => toggle("outside")}>
-        {caret(outsideOpen)}
+        {/* The native app draws a row's twisty itself for aria-expanded. */}
+        {WINGS_NATIVE ? null : caret(outsideOpen)}
         <Text size="small" weight="medium" truncate className="fg">Outside this sprint</Text>
         {outside.loading ? spinner() : <Text size="small" tone="muted" numeric>{String(others.length)}</Text>}
       </ListButton>
@@ -193,7 +194,7 @@ export function renderList() {
       return (
         <Stack key={key} as="section" gap="none">
           <ListButton className={`group-head${open ? " open" : ""}`} aria-expanded={open} onClick={() => toggle(key)}>
-            {caret(open)}
+            {WINGS_NATIVE ? null : caret(open)}
             {dot(g.color)}
             <Text size="small" weight="medium" truncate className="fg">{state}</Text>
             <Text size="small" tone="muted" numeric>{String(g.items.length)}</Text>
