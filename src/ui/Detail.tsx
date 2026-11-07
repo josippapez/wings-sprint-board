@@ -97,7 +97,8 @@ export function renderDetail() {
 
   return (
     <>
-      <Row>
+      {/* Open in Azure DevOps goes under Back when the sidebar is too narrow for both, rather than past its edge. */}
+      <Row wrap>
         <Button variant="ghost" onClick={back}>‹ Back</Button>
         <Text grow />
         <Button variant="ghost" onClick={() => void wings.openUrl(workItemUrl(id))}>Open in Azure DevOps</Button>
