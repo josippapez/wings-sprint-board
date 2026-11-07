@@ -34,6 +34,8 @@ export const boardOf = async () => state.result?.snapshot ?? (await lastBoard.ge
 const publish = () => ch.put("state", undefined, published());
 
 function label() {
+  // The native app has no sidebar labels yet, and a call it lacks would fail the check that ends with this.
+  if (!("setSidebarLabel" in wings)) return;
   const r = state.result;
   if (state.phase === "signed-out") return wings.setSidebarLabel(SIDEBAR, "Sign in", { tone: "warning" });
   if (state.phase !== "ready" || !r) return wings.setSidebarLabel(SIDEBAR, null);

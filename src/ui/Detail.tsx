@@ -9,6 +9,7 @@ import { page, render } from "./page";
 import { markdownText, richText, textOf } from "./richText";
 import { avatar, dot, errorLine, spinner } from "./bits";
 import { prTone } from "./BoardList";
+import { Box, Inline } from "./layout";
 
 /** An item link that opens it here. */
 function itemLinkHere(id: number) {
@@ -32,7 +33,7 @@ const unclamped = new Set<string>();
 /** Text cut to a few lines with "Show all" when it's long. */
 function clampable(key: string, body: ReactElement<{ className?: string; children?: ReactNode }>) {
   const long = textOf(body).length > 600;
-  const clamped = long && !unclamped.has(key) ? <div className={`${body.props.className} clamp`}>{body.props.children}</div> : body;
+  const clamped = long && !unclamped.has(key) ? <Box className={`${body.props.className} clamp`}>{body.props.children}</Box> : body;
   const more = long ? (
     <Row>
       <Button variant="ghost" size="sm" onClick={() => (unclamped.has(key) ? unclamped.delete(key) : unclamped.add(key), render())}>{unclamped.has(key) ? "Show less" : "Show all"}</Button>
@@ -110,12 +111,12 @@ export function renderDetail() {
         items={meta([
           ["State", <Row gap="s">{dot(info?.color ?? "#888888")}{state}</Row>],
           ["Assigned", <Row gap="s">{avatar(assignee)}{assignee ?? "Unassigned"}</Row>],
-          ["Iteration", f["System.IterationPath"] ? <span title={f["System.IterationPath"]}>{lastPart(f["System.IterationPath"])}</span> : null],
-          ["Area", f["System.AreaPath"] ? <span title={f["System.AreaPath"]}>{lastPart(f["System.AreaPath"])}</span> : null],
+          ["Iteration", f["System.IterationPath"] ? <Inline title={f["System.IterationPath"]}>{lastPart(f["System.IterationPath"])}</Inline> : null],
+          ["Area", f["System.AreaPath"] ? <Inline title={f["System.AreaPath"]}>{lastPart(f["System.AreaPath"])}</Inline> : null],
           ["Tags", tags.length ? <Row gap="s" wrap>{tags.map((t, n) => <Badge variant="outline" key={n}>{t}</Badge>)}</Row> : null],
           ["Parent", parent ? itemLinkHere(parent) : null],
           ["Children", children.length ? <Stack gap="none">{children.map(itemLinkHere)}</Stack> : null],
-          ["Blocked by", blockedBy ? <Stack gap="none">{blockerIds.map(itemLinkHere)}{blockedNote ? <span>{blockedNote}</span> : null}</Stack> : null],
+          ["Blocked by", blockedBy ? <Stack gap="none">{blockerIds.map(itemLinkHere)}{blockedNote ? <Inline>{blockedNote}</Inline> : null}</Stack> : null],
           ["Pull requests", prRows.length ? <Stack gap="none">{prRows}</Stack> : null],
         ])}
       />

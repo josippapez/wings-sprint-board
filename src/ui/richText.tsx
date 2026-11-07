@@ -1,6 +1,10 @@
 import { createElement, isValidElement, useEffect, useState, type ReactElement, type ReactNode } from "react";
 
+import { Markdown } from "wings-plugin-ui";
+
+import { Html } from "./html-native";
 import { loadImage } from "./images";
+import { Box } from "./layout";
 
 /** The text a node shows, like an element's textContent. */
 export function textOf(node: ReactNode): string {
@@ -43,6 +47,13 @@ function imageNode(src: string, key: number) {
  * loads nothing, and only its text and a few structural tags are copied out: never the parsed nodes themselves.
  */
 export function richText(html: string) {
+  // The native app has no DOMParser: there a short tokenizer reads the HTML, as the Work item plugin's does.
+  if (WINGS_NATIVE)
+    return (
+      <Box className="rich">
+        <Html html={html} />
+      </Box>
+    );
   const doc = new DOMParser().parseFromString(html, "text/html");
   let key = 0;
   const walk = (from: Node): ReactNode[] => {
@@ -128,6 +139,13 @@ export function markdownText(src: string) {
   const text = src.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (m, e: string) =>
     e[0] === "#" ? String.fromCodePoint(parseInt(e.slice(e[1].toLowerCase() === "x" ? 2 : 1), e[1].toLowerCase() === "x" ? 16 : 10) || 0xfffd) : (named[e.toLowerCase()] ?? m),
   );
+  // The native app draws markdown with wings-plugin-ui's Markdown, where an image shows as its alt text.
+  if (WINGS_NATIVE)
+    return (
+      <Box className="rich">
+        <Markdown source={text} />
+      </Box>
+    );
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   let para: string[] = [];
   let list: { tag: "ul" | "ol"; items: ReactElement[] } | null = null;

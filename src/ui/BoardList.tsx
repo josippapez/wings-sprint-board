@@ -5,7 +5,8 @@ import { Badge, Empty, ListButton, Row, SearchField, Select, Stack, Text } from 
 import { board, isOpen, NO_SPRINT, openItem, outside, saveView, searchOutside, settingsOf, stateInfo, toggle, typeColor, type BoardItem } from "./board";
 import { meOf, teamSprintsOf } from "../lib/lists";
 import { render } from "./page";
-import { avatar, CARET, dot, errorLine, icon, spinner } from "./bits";
+import { avatar, caret, dot, errorLine, spinner } from "./bits";
+import { Box, Inline, PlainButton } from "./layout";
 import { need, want } from "./want";
 
 const CATEGORY_ORDER = ["Proposed", "InProgress", "Resolved", "Completed", "Removed"];
@@ -27,10 +28,10 @@ function itemRow(i: BoardItem, o: { child?: boolean; state?: boolean; kids?: Boa
   const open = kids.length > 0 && isOpen(`p:${i.id}`, false);
   const done = kids.filter((k) => k.category === "Completed").length;
   const row = (
-    <div key={i.id} className={`item-row${o.child ? " child" : ""}`}>
+    <Box key={i.id} className={`item-row${o.child ? " child" : ""}`}>
       {kids.length
-        ? <button className={`twisty${open ? " open" : ""}`} type="button" aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${kids.length} children`} title={`${done}/${kids.length} done`} onClick={() => toggle(`p:${i.id}`)}>{icon(CARET)}</button>
-        : <span className="twisty-space" />}
+        ? <PlainButton className={`twisty${open ? " open" : ""}`} type="button" aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${kids.length} children`} title={`${done}/${kids.length} done`} onClick={() => toggle(`p:${i.id}`)}>{caret(open)}</PlainButton>
+        : <Inline className="twisty-space" />}
       <ListButton className="item-main" title={`${i.type} ${i.id}: ${i.title}${i.iteration ? `\n${i.iteration}` : ""}`} onClick={() => void openItem(i.id)}>
         {dot(typeColor(i.type), i.type)}
         <Text mono size="tiny" tone="muted" numeric>{String(i.id)}</Text>
@@ -43,7 +44,7 @@ function itemRow(i: BoardItem, o: { child?: boolean; state?: boolean; kids?: Boa
         {i.comments ? <Badge variant="outline" className="talk" title={`${i.comments} comment${i.comments > 1 ? "s" : ""}`}>{String(i.comments)}</Badge> : null}
         {avatar(i.assignee)}
       </ListButton>
-    </div>
+    </Box>
   );
   if (!open) return row;
   return (
@@ -171,7 +172,7 @@ export function renderList() {
   const outsideSection = q && !sprint ? (
     <Stack key="outside" as="section" gap="none" aria-busy={outside.loading}>
       <ListButton className={`group-head${outsideOpen ? " open" : ""}`} aria-expanded={outsideOpen} onClick={() => toggle("outside")}>
-        {icon(CARET)}
+        {caret(outsideOpen)}
         <Text size="small" weight="medium" truncate className="fg">Outside this sprint</Text>
         {outside.loading ? spinner() : <Text size="small" tone="muted" numeric>{String(others.length)}</Text>}
       </ListButton>
@@ -192,7 +193,7 @@ export function renderList() {
       return (
         <Stack key={key} as="section" gap="none">
           <ListButton className={`group-head${open ? " open" : ""}`} aria-expanded={open} onClick={() => toggle(key)}>
-            {icon(CARET)}
+            {caret(open)}
             {dot(g.color)}
             <Text size="small" weight="medium" truncate className="fg">{state}</Text>
             <Text size="small" tone="muted" numeric>{String(g.items.length)}</Text>

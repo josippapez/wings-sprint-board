@@ -119,10 +119,10 @@ export function toggle(key: string) {
 /** Opens an item in the sidebar and reads what the board doesn't have. */
 export async function openItem(id: number, push = true) {
   if (push) {
-    if (!board.opened.length) board.listScroll = document.scrollingElement?.scrollTop ?? 0;
+    if (!board.opened.length && !WINGS_NATIVE) board.listScroll = document.scrollingElement?.scrollTop ?? 0;
     if (board.opened.at(-1) !== id) board.opened.push(id);
     render();
-    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    if (!WINGS_NATIVE && document.scrollingElement) document.scrollingElement.scrollTop = 0;
   }
   const known = byId().get(id);
   const cached = details.get(id);
@@ -246,5 +246,5 @@ export function searchOutside(text: string, sprint: string) {
 export function back() {
   board.opened.pop();
   render();
-  if (!board.opened.length && document.scrollingElement) document.scrollingElement.scrollTop = board.listScroll;
+  if (!board.opened.length && !WINGS_NATIVE && document.scrollingElement) document.scrollingElement.scrollTop = board.listScroll;
 }

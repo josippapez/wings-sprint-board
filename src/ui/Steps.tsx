@@ -8,6 +8,7 @@ import { orgUsersOf, type SprintItem } from "../lib/lists";
 import { want } from "./want";
 import { counted, settle, setup, workingDaysAgo, type Ctx, type Draft } from "./setup";
 import { avatar, dot } from "./bits";
+import { Box } from "./layout";
 import { labelled, labelledGroup, listStatus, pickMany, pickOne, TextField } from "./Pickers";
 
 const typeColorOf = (c: Ctx, type: string) => c.m?.types.find((t) => t.name === type)?.color ?? "#888888";
@@ -83,7 +84,7 @@ export const STEPS: {
       const names: Record<string, string> = { Proposed: "Not started", InProgress: "In progress", Resolved: "Resolved", Completed: "Done" };
       return preview(
         `${c.data.sprint.name} · ${c.data.items.length} items`,
-        <div key="bar" className="bar">{cats.map(([cat, n]) => <span key={cat} style={{ flex: n, background: colors[cat] ?? "var(--wings-hairline-strong)" }} title={`${names[cat] ?? cat}: ${n}`} />)}</div>,
+        <Box key="bar" className="bar">{cats.map(([cat, n]) => <span key={cat} style={{ flex: n, background: colors[cat] ?? "var(--wings-hairline-strong)" }} title={`${names[cat] ?? cat}: ${n}`} />)}</Box>,
         <Row key="legend" wrap>{cats.map(([cat, n]) => <Row key={cat} as="span" gap="s"><Dot color={colors[cat] ?? "var(--wings-hairline-strong)"} /><Text size="tiny" tone="muted">{`${names[cat] ?? cat} ${n}`}</Text></Row>)}</Row>,
       );
     },
@@ -138,7 +139,7 @@ export const STEPS: {
       return preview(
         mine(story) ? "Your team's story, with its tasks" : "A story that isn't your team's",
         previewRow(c, story, { chips: [mine(story) ? <Badge key="mine" tone="success">Yours</Badge> : <Badge variant="outline" key="mine">Not yours</Badge>] }),
-        ...kids.map((k) => <div key={k.id} className="preview-child">{previewRow(c, k, { dim: !(d.childTypes ?? []).includes(k.type), chips: [(d.childTypes ?? []).includes(k.type) ? <Badge variant="outline" key="checked">checked</Badge> : null] })}</div>),
+        ...kids.map((k) => <Box key={k.id} className="preview-child">{previewRow(c, k, { dim: !(d.childTypes ?? []).includes(k.type), chips: [(d.childTypes ?? []).includes(k.type) ? <Badge variant="outline" key="checked">checked</Badge> : null] })}</Box>),
       );
     },
   },

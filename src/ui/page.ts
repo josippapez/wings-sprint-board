@@ -24,6 +24,8 @@ export function onRender(draw: () => void) {
 }
 
 export function render() {
+  // The native app has no document: it keeps focus and scrolling itself, and React draws on its next turn.
+  if (WINGS_NATIVE) return void redraw?.();
   const active = document.activeElement;
   const focused = active?.id;
   const caret = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement ? active.selectionStart : null;

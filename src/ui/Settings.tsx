@@ -6,13 +6,14 @@ import { page, render } from "./page";
 import { context, detect, save, setup } from "./setup";
 import { errorLine, spinner } from "./bits";
 import { STEPS } from "./Steps";
+import { Box, Item, PlainButton, Unordered } from "./layout";
 
 /** Moves to a step and puts focus on its question. */
 function goTo(n: number) {
   setup.step = Math.max(0, Math.min(STEPS.length - 1, n));
   setup.focusAfterRender = "step-question";
   render();
-  if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+  if (!WINGS_NATIVE && document.scrollingElement) document.scrollingElement.scrollTop = 0;
 }
 
 export function renderSettings() {
@@ -25,6 +26,11 @@ export function renderSettings() {
   const last = step === STEPS.length - 1;
   const why = s.why(c);
   const { detection, detectError } = setup;
+  const submit = () => {
+    if (!ready) return;
+    if (last) void save();
+    else goTo(step + 1);
+  };
   return (
     <Card
       as="form"
@@ -40,18 +46,16 @@ export function renderSettings() {
       }}
       onSubmit={(e) => {
         e.preventDefault();
-        if (!ready) return;
-        if (last) void save();
-        else goTo(step + 1);
+        submit();
       }}
     >
       <Row>
         <Text tone="muted" size="small" grow>{`${inSetup ? "Set up" : "Settings"} · step ${step + 1} of ${STEPS.length}`}</Text>
         {inSetup ? null : <Button variant="ghost" size="sm" onClick={() => ((setup.draft = null), (setup.detection = null), (page.localError = null), render())}>Close</Button>}
       </Row>
-      <div className="dots" role="list">
+      <Box className="dots" role="list">
         {STEPS.map((x, n) => (
-          <button
+          <PlainButton
             key={x.id}
             type="button"
             role="listitem"
@@ -62,19 +66,22 @@ export function renderSettings() {
             // Later steps need the board picked first.
             disabled={n > step && !essentials}
             onClick={() => goTo(n)}
-          />
+          >
+            {/* The browser draws a dot; the native app numbers the steps. */}
+            {WINGS_NATIVE ? String(n + 1) : null}
+          </PlainButton>
         ))}
-      </div>
+      </Box>
       <Title id="step-question" size="large" tabIndex={-1}>{s.question}</Title>
       <Text as="p" tone="muted">{s.explain}</Text>
       {why ? <Text as="p" tone="info" size="small">{why}</Text> : null}
       {detectError && step === 0 ? errorLine(`Couldn't detect the settings: ${detectError}`) : null}
       {detection && step === 0 ? (
         <Disclosure summary={`What was detected (${detection.calls} calls, ${(detection.ms / 1000).toFixed(1)} s)`}>
-          <ul className="detected">
-            {detection.notes.map((n, i) => <li key={`n${i}`}>{n}</li>)}
-            {detection.off.map((n, i) => <li key={`o${i}`} className="muted">{`Off: ${n}`}</li>)}
-          </ul>
+          <Unordered className="detected">
+            {detection.notes.map((n, i) => <Item key={`n${i}`}>{n}</Item>)}
+            {detection.off.map((n, i) => <Item key={`o${i}`} className="muted">{`Off: ${n}`}</Item>)}
+          </Unordered>
         </Disclosure>
       ) : null}
       {s.body(c)}
@@ -84,7 +91,8 @@ export function renderSettings() {
         {step > 0 ? <Button variant="ghost" onClick={() => goTo(step - 1)}>Back</Button> : null}
         <Text grow />
         {s.optional && s.off ? <Button variant="ghost" onClick={() => (s.off?.(c.d), last ? void save() : goTo(step + 1))}>Turn this check off</Button> : null}
-        <Button type="submit" variant="default" disabled={!ready}>{last ? (inSetup ? "Finish" : "Save") : "Next"}</Button>
+        {/* The native app has no form to submit. */}
+        <Button type="submit" variant="default" disabled={!ready} onClick={WINGS_NATIVE ? submit : undefined}>{last ? (inSetup ? "Finish" : "Save") : "Next"}</Button>
       </Row>
       <Row justify="end">
         <Button variant="ghost" size="sm" busy={!!setup.detecting} onClick={() => void detect()}>Detect again</Button>

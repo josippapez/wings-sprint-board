@@ -1,6 +1,6 @@
 // Small pieces every view of the sidebar draws.
 
-import { Dot, Spinner, Text } from "wings-plugin-ui";
+import { Avatar, Dot, Spinner, Text } from "wings-plugin-ui";
 
 export const spinner = () => <Spinner size="large" />;
 
@@ -16,6 +16,7 @@ export const dot = (color: string, title?: string) => <Dot color={/^#[0-9a-f]{6}
 
 /** Initials in a circle whose colour comes from the name. */
 export function avatar(name: string | null) {
+  if (WINGS_NATIVE) return name ? <Avatar name={name} size="small" /> : <Text tone="muted">–</Text>;
   if (!name) return <span className="avatar empty" title="Unassigned">–</span>;
   const initials = name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   let hash = 0;
@@ -31,3 +32,6 @@ export function icon(d: string) {
   );
 }
 export const CARET = "M4.5 3L7.5 6L4.5 9";
+
+/** The caret of a row that folds: the CSS turns it when `open`, and the native app, which draws no SVG, shows one that points the way. */
+export const caret = (open: boolean) => (WINGS_NATIVE ? <Text tone="muted">{open ? "▾" : "▸"}</Text> : icon(CARET));

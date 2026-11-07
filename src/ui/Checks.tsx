@@ -6,15 +6,16 @@ import { openItem } from "./board";
 import type { Finding } from "../lib/check";
 import { page } from "./page";
 import type { Published } from "../lib/types";
+import { Inline, Para, PlainButton } from "./layout";
 
 type Person = NonNullable<Published["result"]>["people"][number];
 
 /** A work item's id and title, opening it in the sidebar. */
 const itemLink = (item: { id: number; title: string }) => (
-  <button className="link" type="button" onClick={() => void openItem(item.id)}>
-    <span className="id">{`#${item.id} `}</span>
+  <PlainButton className="link" type="button" onClick={() => void openItem(item.id)}>
+    <Inline className="id">{`#${item.id} `}</Inline>
     {item.title}
-  </button>
+  </PlainButton>
 );
 
 const renderFinding = (f: Finding, n: number) => (
@@ -75,10 +76,10 @@ export function renderChecks() {
       <Heading key="low">Blocked with only lower-priority work</Heading>,
       ...r.people.map((p, n) => (
         <Card key={`verdict:${n}`} compact>
-          <p>
+          <Para>
             <Text as="strong" weight="strong" tone={p.lowPriority!.meets ? "danger" : undefined}>{`${p.name}: ${p.lowPriority!.meets ? "yes" : "no"}. `}</Text>
             {p.lowPriority!.reason}
-          </p>
+          </Para>
         </Card>
       )),
     );

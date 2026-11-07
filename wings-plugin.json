@@ -1,10 +1,11 @@
 {
   "id": "sprint-board",
   "name": "Sprint board",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "minWingsVersion": "0.1.108",
   "description": "Your team's current Azure DevOps sprint in a sidebar: items by state with their tasks, details and comments, and board checks with a proposed fix for each. Read-only.",
   "api": 1,
+  "native": true,
   "main": "dist/main.js",
   "permissions": {
     "exec": [
