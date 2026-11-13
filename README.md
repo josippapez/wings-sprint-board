@@ -10,7 +10,7 @@ Every item of the current sprint in your team's areas, grouped by state in workf
 
 Search by id or title, and filter by person (Everyone, Mine, Unassigned or anyone in the sprint) and type. Mine is whoever `az` is signed in as. The filters and what's folded are remembered.
 
-Click a row for the item: its state, assignee, iteration, area, tags, parent, children, what blocks it, its pull requests, the description and acceptance criteria, and the discussion, oldest comment first. Item links open in the sidebar; **Open in Azure DevOps** opens the browser. Text from Azure DevOps is shown as text: formatting is rebuilt from paragraphs, lists and emphasis only, images from Azure DevOps load in the text (the board fetches them with your `az` sign-in, and shows an [image] link that opens the picture in the browser while one loads or when it can't), and only Azure DevOps links open.
+Click a row for the item: its state, assignee, iteration, area, tags, parent, children, what blocks it, its pull requests, the description and acceptance criteria, and the discussion, oldest comment first. Item links open in the sidebar; **Open in Azure DevOps** opens the browser. Text from Azure DevOps is shown as text: formatting is rebuilt from paragraphs, lists and emphasis only, an image shows as a muted [image], and only Azure DevOps links open.
 
 The list comes from the last board check, so it costs nothing to open. An item reads its details and comments when you open it (two calls) and each pull request after that, and keeps them until the board shows a newer revision of it.
 
@@ -64,15 +64,21 @@ With Wings connected to Claude Code (Plugins, Claude Code, Connect), Claude gets
 
 ## Install
 
-Make the package and drop it on the Wings window, or pick it under Plugins, Choose a file:
-
-```sh
-npm install
-npm run check              # type-checks src/ and writes sprint-board.wings-plugin
-```
-
-Then turn it on in Plugins.
+Wings installs a plugin folder straight from this repository: add it by its link, or drop the folder on the Wings window and turn it on in Plugins. The built modules are committed in `dist/native/`. It needs Wings 0.2.17 or later.
 
 ## Develop
 
-The code is TypeScript in `src/`: `src/main.ts` is the background check, `src/tools.ts` the tool Claude gets, `src/pages/sidebar.tsx` the sidebar page (React on `wings-plugin-ui`, with its own bits in `sidebar.css`), `src/main/` the check's state, `src/ui/` the sidebar's components and `src/lib/` the logic and the messages between main and the page. `preview/sidebar.tsx` has fixtures for `npx wings-plugin shot`. The repo holds only source: `npm run check` builds the plugin into `sprint-board.wings-plugin`, which isn't committed, and a release builds it. `npm run dev` rebuilds on each save and has Wings restart the plugin.
+The plugin is Rust built to WebAssembly, with no JavaScript. `rust/` is one crate with a feature for each frame the manifest names: `main` (`rust/src/main_frame.rs`) is the background check, the label and the tool Claude gets, and `sidebar` (`rust/src/sidebar/`) is the sidebar page. `rust/src/check.rs` is the board check, `rust/src/az.rs` what is read with `az`, `rust/src/settings.rs` the settings and `rust/src/state.rs` what main keeps in storage for the sidebar.
+
+The crate depends on the `wings-plugin` SDK in the public Wings repository, at the commit in `rust/Cargo.toml`.
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo test --manifest-path rust/Cargo.toml                  # the logic, on this computer
+cargo test --manifest-path rust/Cargo.toml --features main
+cargo test --manifest-path rust/Cargo.toml --features sidebar
+sh build-rust.sh                                            # writes dist/native/main.wasm and sidebar.wasm
+sh build-rust.sh --check                                    # fails if a committed module is out of date
+```
+
+Commit the rebuilt modules with the change: they are what Wings runs. A release is a tag like `v0.11.0`: the workflow attaches the package to a GitHub release.

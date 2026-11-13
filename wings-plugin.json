@@ -1,12 +1,11 @@
 {
   "id": "sprint-board",
   "name": "Sprint board",
-  "version": "0.10.1",
-  "minWingsVersion": "0.1.108",
+  "version": "0.11.0",
+  "minWingsVersion": "0.2.17",
   "description": "Your team's current Azure DevOps sprint in a sidebar: items by state with their tasks, details and comments, and board checks with a proposed fix for each. Read-only.",
   "api": 1,
-  "native": true,
-  "main": "dist/main.js",
+  "main": "dist/native/main.wasm",
   "permissions": {
     "exec": [
       "git remote get-url []",
@@ -20,17 +19,10 @@
       "az repos pr show [--id --detect --organization -o]",
       "az rest [--resource --url -o]",
       "az account show [--query -o]",
-      "az account get-access-token [--resource -o]",
       "az devops team list-member [--team --project --top --organization -o]",
       "az devops user list [--top --organization -o]",
       "az login [--allow-no-subscriptions --output]"
     ],
-    "fetch": [
-      "GET https://dev.azure.com/"
-    ],
-    "secrets": {
-      "azure-devops": "https://dev.azure.com/"
-    },
     "openUrl": [
       "https://dev.azure.com/"
     ]
@@ -41,7 +33,7 @@
         "id": "board",
         "title": "Sprint board",
         "icon": "kanban",
-        "page": "dist/sidebar.html"
+        "page": "dist/native/sidebar.wasm"
       }
     ],
     "mcpTools": [
